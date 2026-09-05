@@ -30,6 +30,7 @@ Thumbs.db
 # Environment variables / secrets
 .env
 .env.*
+!.env.example
 
 # Coverage and test cache
 htmlcov/

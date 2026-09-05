@@ -85,38 +85,17 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
         print(f"Warning: Could not generate dashboard: {e}")
 
 def pytest_runtest_logreport(report):
-    """Hook to capture test results and save failed request payloads"""
-    if report.when == "call":
-        test_results["total"] += 1
+    """Persist the request/response of any failed test for debugging.
 
-        test_info = {
-            "name": report.nodeid,
-            "outcome": report.outcome,
-            "duration": round(report.duration, 2)
-        }
+    Result totals are built in pytest_terminal_summary from the reporter's own
+    stats, so nothing is accumulated here.
+    """
+    if report.when != "call" or report.outcome != "failed":
+        return
 
-        # Capture stdout (print statements from tests)
-        if hasattr(report, 'capstdout') and report.capstdout:
-            test_info["stdout"] = report.capstdout
-
-        # Capture stderr
-        if hasattr(report, 'capstderr') and report.capstderr:
-            test_info["stderr"] = report.capstderr
-
-        if report.outcome == "passed":
-            test_results["passed"] += 1
-        elif report.outcome == "failed":
-            test_results["failed"] += 1
-            test_info["error"] = str(report.longrepr) if hasattr(report, 'longrepr') else "Unknown error"
-
-            # Save the failed request details
-            if hasattr(report, '_failed_request_data'):
-                _save_failed_request(report.nodeid, report._failed_request_data, test_info["error"])
-
-        elif report.outcome == "skipped":
-            test_results["skipped"] += 1
-
-        test_results["tests"].append(test_info)
+    error = str(report.longrepr) if hasattr(report, "longrepr") else "Unknown error"
+    if hasattr(report, "_failed_request_data"):
+        _save_failed_request(report.nodeid, report._failed_request_data, error)
 
 
 def _save_failed_request(nodeid, request_data, error_message):

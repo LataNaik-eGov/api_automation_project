@@ -1,0 +1,12 @@
+{
+  "BEDNET": {
+    "displayName": "Bednet Distribution",
+    "projectTypeCode": "Bednet",
+    "beneficiaryType": "HOUSEHOLD"
+  },
+  "MR-DN": {
+    "displayName": "Seasonal Malaria Chemoprevention (SMC)",
+    "projectTypeCode": "MR-DN",
+    "beneficiaryType": "INDIVIDUAL"
+  }
+}
