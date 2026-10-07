@@ -3,7 +3,7 @@ from utils.api_client import APIClient
 from utils.data_loader import load_payload
 from utils.auth import get_auth_token
 from utils.request_info import get_request_info
-from utils.config import tenantId, hierarchyType, invalidTenantId
+from utils.config import tenantId, hierarchyType, boundaryType, invalidTenantId
 
 
 @pytest.mark.positive
@@ -11,7 +11,7 @@ def test_search_boundary():
     token = get_auth_token("user")
     client = APIClient(token=token)
 
-    res = search_boundary_data(token, client, tenantId, "COUNTRY", hierarchyType)
+    res = search_boundary_data(token, client, tenantId, boundaryType, hierarchyType)
     assert res.status_code == 200, f"Boundary search failed: {res.text}"
 
     data = res.json()
@@ -47,7 +47,7 @@ def test_search_boundary_with_invalid_tenant_id():
     url = (
         f"/boundary-service/boundary-relationships/_search"
         f"?tenantId={invalidTenantId}&includeChildren=true"
-        f"&boundaryType=COUNTRY&hierarchyType={hierarchyType}"
+        f"&boundaryType={boundaryType}&hierarchyType={hierarchyType}"
     )
 
     response = client.post(url, payload)
