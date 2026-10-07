@@ -1,0 +1,13 @@
+{
+    "ResourceDetails": {
+        "type": "unified-console-validation",
+        "hierarchyType": "",
+        "tenantId": "",
+        "fileStoreId": "",
+        "additionalDetails": {},
+        "referenceId": "",
+        "locale": "",
+        "referenceType": "campaign"
+    },
+    "RequestInfo": {}
+}

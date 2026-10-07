@@ -1,14 +1,13 @@
 {
   "serviceCode": [
-    "NotEnoughStock",
     "SyncNotWorking",
-    "NoWater",
-    "Other",
+    "NotEnoughStock",
     "PerformanceIssue",
     "SecurityIssues",
     "DataIssues",
+    "TechnicalIssues",
     "UserAccountIssues",
-    "TechnicalIssues"
+    "Other"
   ],
   "houseStructureTypes": [
     "CONCRETE",

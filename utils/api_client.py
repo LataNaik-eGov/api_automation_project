@@ -63,3 +63,31 @@ class APIClient:
         url = BASE_URL + endpoint
         response = requests.delete(url, headers=self.headers)
         return self._track("DELETE", url, None, response)
+
+    def upload_file(self, endpoint, file_path, form_fields=None):
+        """Multipart upload, as used by the filestore service.
+
+        The JSON Content-Type header is deliberately dropped: requests must set
+        multipart/form-data itself so it can generate the boundary. Passing the
+        class-level headers here yields a 400 from the filestore.
+
+        Returns the raw response; the filestore answers with
+        ``{"files": [{"fileStoreId": ..., "tenantId": ...}]}``.
+        """
+        url = BASE_URL + endpoint
+        headers = {"Authorization": self.headers["Authorization"]}
+
+        filename = os.path.basename(file_path)
+        content_type = (
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            if filename.lower().endswith((".xlsx", ".xlsm"))
+            else "application/octet-stream"
+        )
+
+        with open(file_path, "rb") as handle:
+            files = {"file": (filename, handle, content_type)}
+            response = requests.post(
+                url, headers=headers, files=files, data=form_fields or {}
+            )
+
+        return self._track("POST", url, {"file": filename, **(form_fields or {})}, response)

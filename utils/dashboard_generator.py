@@ -134,6 +134,39 @@ def parse_test_results():
 
     return default_results
 
+def parse_created_campaigns():
+    """Campaigns the console E2E created this run, from output/console/campaigns.json.
+
+    Returned newest-first so the most recent run is at the top. Empty when the
+    console suite has not run.
+    """
+    base_path = os.path.dirname(__file__)
+    campaigns_file = os.path.join(base_path, "..", "output", "console", "campaigns.json")
+
+    try:
+        if not os.path.exists(os.path.abspath(campaigns_file)):
+            return []
+        with open(os.path.abspath(campaigns_file), "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception as e:
+        print(f"Warning: Could not parse created campaigns: {e}")
+        return []
+
+    campaigns = []
+    for campaign_type, details in data.items():
+        if not isinstance(details, dict):
+            continue
+        campaigns.append({
+            "type": campaign_type,
+            "name": details.get("campaignName", ""),
+            "number": details.get("campaignNumber", ""),
+            "id": details.get("campaignId", ""),
+            "boundaries": details.get("boundaryCount", ""),
+            "rows_filled": (details.get("excelIngestion") or {}).get("rowsFilled", ""),
+        })
+    return sorted(campaigns, key=lambda c: c["number"], reverse=True)
+
+
 def count_operations(test_results):
     """Count create and search operations from test names"""
     operations = {
@@ -238,6 +271,7 @@ def generate_dashboard():
     """Generate an interactive HTML dashboard"""
     entities = parse_ids_file()
     test_results = parse_test_results()
+    created_campaigns = parse_created_campaigns()
     operations = count_operations(test_results)
     service_breakdown = get_service_breakdown(test_results)
     tests_by_service = get_tests_by_service(test_results)
@@ -254,6 +288,44 @@ def generate_dashboard():
     # Get timestamp
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     duration = calculate_duration(test_results.get("start_time"), test_results.get("end_time"))
+
+    if created_campaigns:
+        campaign_rows = "".join(
+            f"""
+                        <tr>
+                            <td><span class="badge badge-create">{c['type']}</span></td>
+                            <td><strong class="campaign-name">{c['name']}</strong></td>
+                            <td><code>{c['number']}</code></td>
+                            <td><code class="campaign-id">{c['id']}</code></td>
+                            <td>{c['boundaries']}</td>
+                            <td>{c['rows_filled']}</td>
+                        </tr>"""
+            for c in created_campaigns
+        )
+        campaigns_section = f"""
+        <!-- Campaigns created by the console E2E -->
+        <div class="section">
+            <h2>Campaigns Created</h2>
+            <p class="section-hint">
+                Created by <code>test_campaign_e2e.py</code> this run &mdash; look these up in
+                the console under <em>My campaigns &rarr; Upcoming</em> to verify them by hand.
+            </p>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Type</th><th>Campaign Name</th><th>Campaign Number</th>
+                            <th>Campaign ID</th><th>Boundaries</th><th>Rows Filled</th>
+                        </tr>
+                    </thead>
+                    <tbody>{campaign_rows}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+"""
+    else:
+        campaigns_section = ""
 
     # Generate HTML
     html_content = f"""<!DOCTYPE html>
@@ -336,6 +408,9 @@ def generate_dashboard():
             letter-spacing: 1px;
         }}
 
+        .section-hint {{ color: #666; font-size: 14px; margin: -8px 0 16px; }}
+        .campaign-name {{ color: #c84c0c; font-size: 15px; }}
+        .campaign-id {{ font-size: 12px; color: #777; }}
         .stat-card.success .stat-number {{ color: #28a745; }}
         .stat-card.danger .stat-number {{ color: #dc3545; }}
         .stat-card.info .stat-number {{ color: #667eea; }}
@@ -665,6 +740,8 @@ def generate_dashboard():
                 <div class="stat-label">Services Tested</div>
             </div>
         </div>
+
+        {campaigns_section}
 
         <!-- Charts -->
         <div class="charts-container">
