@@ -18,10 +18,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -50,6 +50,8 @@ jobs:
           SERVICE_INDIVIDUAL: ${{ secrets.SERVICE_INDIVIDUAL }}
           SERVICE_PROJECT: ${{ secrets.SERVICE_PROJECT }}
           SERVICE_MDMS: ${{ secrets.SERVICE_MDMS }}
+          SERVICE_HRMS: ${{ secrets.SERVICE_HRMS }}
+          SERVICE_PGR: ${{ secrets.SERVICE_PGR }}
         run: |
           pytest tests/ -v --html=reports/report.html --self-contained-html --junitxml=reports/junit.xml || true
 
@@ -59,7 +61,7 @@ jobs:
           cp -r output/* reports/ 2>/dev/null || true
 
       - name: Upload test report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         if: always()
         with:
           name: test-reports
@@ -67,14 +69,14 @@ jobs:
           retention-days: 30
 
       - name: Upload test results to GitHub
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         if: always()
         with:
           name: junit-results
           path: reports/junit.xml
 
       - name: Publish Test Results to Summary
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v2
         if: always()
         with:
           name: Test Results

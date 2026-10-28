@@ -173,7 +173,7 @@ def test_configure_campaign_MR_DN():
 
     # Step 1: Fetch boundary hierarchy directly and extract one code per level
     from tests.test_boundary_service import search_boundary_data
-    res = search_boundary_data(token, client, tenantId, "COUNTRY", hierarchyType)
+    res = search_boundary_data(token, client, tenantId, hierarchyType)
     assert res.status_code == 200, f"Boundary search failed: {res.text}"
 
     tenant_boundaries = res.json().get("TenantBoundary", [])
@@ -207,10 +207,12 @@ def test_configure_campaign_MR_DN():
 
         payload = load_payload("project", "create_individual_project.json")
         payload["RequestInfo"] = get_request_info(token)
+        payload["Projects"][0]["tenantId"] = tenantId
         payload["Projects"][0]["projectTypeId"] = projectTypeId
         payload["Projects"][0]["projectType"] = "MR-DN"
         payload["Projects"][0]["projectSubType"] = "MR-DN"
         payload["Projects"][0]["additionalDetails"]["projectType"] = mrdn_data.copy()
+        payload["Projects"][0]["address"]["tenantId"] = tenantId
         payload["Projects"][0]["address"]["boundaryType"] = btype
         payload["Projects"][0]["address"]["boundary"] = code
         payload["Projects"][0]["address"]["locality"]["code"] = code
@@ -341,9 +343,11 @@ def _make_project_type_test(type_id, type_code, num_cycles, type_data):
 
         payload = load_payload("project", "create_individual_project.json")
         payload["RequestInfo"] = get_request_info(token)
+        payload["Projects"][0]["tenantId"] = tenantId
         payload["Projects"][0]["projectTypeId"] = type_id
         payload["Projects"][0]["projectType"] = type_code
         payload["Projects"][0]["projectSubType"] = type_code
+        payload["Projects"][0]["address"]["tenantId"] = tenantId
         payload["Projects"][0]["address"]["boundaryType"] = boundaryType
         payload["Projects"][0]["address"]["boundary"] = boundaryCode
         payload["Projects"][0]["address"]["locality"]["code"] = boundaryCode
@@ -2084,6 +2088,8 @@ def create_individual_project(token, client, boundaryType, boundaryCode, variant
     if projectTypeId:
         payload["Projects"][0]["projectTypeId"] = projectTypeId
         payload["Projects"][0]["additionalDetails"]["projectType"]["id"] = projectTypeId
+    payload["Projects"][0]["tenantId"] = tenantId
+    payload["Projects"][0]["address"]["tenantId"] = tenantId
     payload["Projects"][0]["address"]["boundaryType"] = boundaryType
     payload["Projects"][0]["address"]["boundary"] = boundaryCode
     payload["Projects"][0]["address"]["locality"]["code"] = boundaryCode
@@ -2483,6 +2489,8 @@ def create_individual_project_full(token, client, boundaryType, boundaryCode, va
     if projectTypeId:
         payload["Projects"][0]["projectTypeId"] = projectTypeId
         payload["Projects"][0]["additionalDetails"]["projectType"]["id"] = projectTypeId
+    payload["Projects"][0]["tenantId"] = tenantId
+    payload["Projects"][0]["address"]["tenantId"] = tenantId
     payload["Projects"][0]["address"]["boundaryType"] = boundaryType
     payload["Projects"][0]["address"]["boundary"] = boundaryCode
     payload["Projects"][0]["address"]["locality"]["code"] = boundaryCode

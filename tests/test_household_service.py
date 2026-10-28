@@ -669,6 +669,9 @@ def create_household_full(token, client):
     payload["Household"]["additionalFields"]["fields"][0]["value"] = selected_type
     payload["RequestInfo"] = get_request_info(token)
 
+    payload["Household"]["tenantId"] = tenantId
+    payload["Household"]["address"]["tenantId"] = tenantId
+
     response = client.post("/household/v1/_create", payload)
 
     if response.status_code not in [200, 202]:

@@ -3,7 +3,7 @@ from utils.api_client import APIClient
 from utils.auth import get_auth_token
 from utils.data_loader import load_payload
 from utils.request_info import get_request_info
-from utils.search_helpers import search_entity, extract_id_from_file
+from utils.search_helpers import search_entity, extract_id_from_file, poll_until_match
 from utils.config import tenantId, boundaryCode, individual, invalidTenantId, search_limit, search_offset
 import uuid
 
@@ -188,7 +188,10 @@ def test_update_individual_bulk():
     assert response.status_code == 202, f"Individual bulk update failed: {response.text}"
     print("Bulk update accepted with 202")
 
-    individuals = search_individual_by_client_ref(token, client, individual_data["clientReferenceId"])
+    individuals = poll_until_match(
+        lambda: search_individual_by_client_ref(token, client, individual_data["clientReferenceId"]),
+        lambda result: result[0]["name"]["givenName"] == new_name
+    )
     assert individuals, f"Individual not found after bulk update"
     assert individuals[0]["name"]["givenName"] == new_name, f"givenName not updated. Got {individuals[0].get('name', {}).get('givenName')}"
     print(f"Individual bulk updated successfully. givenName verified as '{new_name}'.")
@@ -358,6 +361,7 @@ def create_individual_bulk(token, client):
     client_ref_id = str(uuid.uuid4())
     payload["Individuals"][0]["clientReferenceId"] = client_ref_id
     payload["Individuals"][0]["address"][0]["clientReferenceId"] = str(uuid.uuid4())
+    payload["Individuals"][0]["address"][0]["locality"]["code"] = boundaryCode
     payload["Individuals"][0]["tenantId"] = tenantId
     payload["Individuals"][0]["address"][0]["tenantId"] = tenantId
 

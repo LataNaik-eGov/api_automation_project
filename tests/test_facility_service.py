@@ -5,7 +5,7 @@ from utils.data_loader import load_payload
 from utils.auth import get_auth_token
 from utils.request_info import get_request_info
 from utils.search_helpers import search_entity, extract_id_from_file, poll_until_found
-from utils.config import tenantId, invalidTenantId, search_limit, search_offset
+from utils.config import tenantId, invalidTenantId, search_limit, search_offset, boundaryCode
 
 
 # --- Test functions ---
@@ -225,6 +225,7 @@ def create_facility(token, client, tenant_id=None):
     effective_tenant = tenant_id if tenant_id is not None else tenantId
     payload["Facility"]["tenantId"] = effective_tenant
     payload["Facility"]["address"]["tenantId"] = effective_tenant
+    payload["Facility"]["address"]["locality"]["code"] = boundaryCode
 
     return client.post("/facility/v1/_create", payload)
 
@@ -241,6 +242,7 @@ def create_facility_full(token, client):
     payload["Facility"]["clientReferenceId"] = str(uuid.uuid4())
     payload["Facility"]["tenantId"] = tenantId
     payload["Facility"]["address"]["tenantId"] = tenantId
+    payload["Facility"]["address"]["locality"]["code"] = boundaryCode
 
     response = client.post("/facility/v1/_create", payload)
 
@@ -313,6 +315,7 @@ def create_facility_bulk(token, client):
     payload["Facilities"][0]["clientReferenceId"] = client_ref_id
     payload["Facilities"][0]["tenantId"] = tenantId
     payload["Facilities"][0]["address"]["tenantId"] = tenantId
+    payload["Facilities"][0]["address"]["locality"]["code"] = boundaryCode
 
     response = client.post("/facility/v1/bulk/_create", payload)
 
