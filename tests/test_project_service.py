@@ -1419,8 +1419,11 @@ def test_create_project_resource_bulk():
     print("Bulk create accepted with 202")
 
     # Step 3: Search by projectId and verify resource with variant_id exists
-    resources = search_project_resource(token, client, project_id)
-    matching = [r for r in resources if r.get("resource", {}).get("productVariantId") == variant_id]
+    # Bulk create persists asynchronously, so poll until the resource is searchable
+    matching = poll_until_found(lambda: [
+        r for r in search_project_resource(token, client, project_id)
+        if r.get("resource", {}).get("productVariantId") == variant_id
+    ])
     assert matching, f"No resource found with productVariantId {variant_id} after bulk create"
     print(f"Verified: resource with productVariantId {variant_id} found in search results")
 
@@ -1457,7 +1460,11 @@ def test_update_project_resource_bulk():
     print("Bulk update accepted with 202")
 
     # Step 3: Search and verify resource type was updated
-    resources = search_project_resource(token, client, project_id)
+    # Bulk update persists asynchronously, so poll until the new type is visible
+    resources = poll_until_match(
+        lambda: search_project_resource(token, client, project_id),
+        lambda rs: any(r.get("id") == resource_data["id"] and r.get("resource", {}).get("type") == new_type for r in rs),
+    )
     updated = next((r for r in resources if r.get("id") == resource_data["id"]), None)
     assert updated is not None, f"Resource {resource_data['id']} not found after bulk update"
     assert updated["resource"]["type"] == new_type, f"Resource type not updated. Expected {new_type}, got {updated.get('resource', {}).get('type')}"
@@ -1554,8 +1561,11 @@ def test_create_project_facility_bulk():
     print("Bulk create accepted with 202")
 
     # Step 3: Search by projectId and verify facility was linked
-    facilities = search_project_facility_by_project(token, client, project_id)
-    matching = [f for f in facilities if f.get("facilityId") == facility_id]
+    # Bulk create persists asynchronously, so poll until the link is searchable
+    matching = poll_until_found(lambda: [
+        f for f in search_project_facility_by_project(token, client, project_id)
+        if f.get("facilityId") == facility_id
+    ])
     assert matching, f"No project facility found with facilityId {facility_id} after bulk create"
     print(f"Verified: project facility with facilityId {facility_id} found in search results")
 
