@@ -99,12 +99,6 @@ Project Task,test_create_project_task_with_invalid_tenant_id,Negative,Create,Cre
 Project Task,test_search_project_task_with_invalid_tenant_id,Negative,Search,Search project task with invalid tenantId should fail
 Project Task,test_update_project_task,Positive,Update,Update project task status (creates task internally)
 Project Task,test_delete_project_task,Positive,Delete,Delete project task (creates all dependencies internally)
-Referral Management - Side Effect,test_create_side_effect,Positive,Create,Create a new side effect
-Referral Management - Side Effect,test_search_side_effect,Positive,Search,Search for a side effect by ID
-Referral Management - Side Effect,test_create_side_effect_with_invalid_tenant_id,Negative,Create,Create side effect with invalid tenantId should fail
-Referral Management - Side Effect,test_search_side_effect_with_invalid_tenant_id,Negative,Search,Search side effect with invalid tenantId should fail
-Referral Management - Side Effect,test_update_side_effect,Positive,Update,Update side effect symptoms (creates side effect internally)
-Referral Management - Side Effect,test_delete_side_effect,Positive,Delete,Delete side effect (creates all dependencies internally)
 Referral Management - Referral,test_create_referral,Positive,Create,Create a new referral
 Referral Management - Referral,test_search_referral,Positive,Search,Search for a referral by ID
 Referral Management - Referral,test_create_referral_with_invalid_tenant_id,Negative,Create,Create referral with invalid tenantId should fail

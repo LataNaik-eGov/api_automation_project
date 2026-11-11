@@ -211,15 +211,15 @@
 
         <div class="summary">
             <div class="summary-card">
-                <h3 id="total-count">113</h3>
+                <h3 id="total-count">107</h3>
                 <p>Total Tests</p>
             </div>
             <div class="summary-card">
-                <h3 id="positive-count">76</h3>
+                <h3 id="positive-count">72</h3>
                 <p>Positive Tests</p>
             </div>
             <div class="summary-card">
-                <h3 id="negative-count">37</h3>
+                <h3 id="negative-count">35</h3>
                 <p>Negative Tests</p>
             </div>
             <div class="summary-card">
@@ -278,7 +278,7 @@
                 <tbody id="tableBody">
                 </tbody>
             </table>
-            <div class="count-display" id="countDisplay">Showing all 113 test cases</div>
+            <div class="count-display" id="countDisplay">Showing all 107 test cases</div>
         </div>
         </div>
 
@@ -568,12 +568,6 @@
             {service: "Project Task", operation: "Search", endpoint: "/project/task/v1/_search", name: "test_search_project_task_with_invalid_tenant_id", description: "Search project task with invalid tenantId should fail", type: "Negative"},
             {service: "Project Task", operation: "Update", endpoint: "/project/task/v1/_update", name: "test_update_project_task", description: "Update project task status", type: "Positive"},
             {service: "Project Task", operation: "Delete", endpoint: "/project/task/v1/_delete", name: "test_delete_project_task", description: "Delete project task (soft delete)", type: "Positive"},
-            {service: "Referral - Side Effect", operation: "Create", endpoint: "/referralmanagement/side-effect/v1/_create", name: "test_create_side_effect", description: "Create a new side effect", type: "Positive"},
-            {service: "Referral - Side Effect", operation: "Search", endpoint: "/referralmanagement/side-effect/v1/_search", name: "test_search_side_effect", description: "Search for a side effect by ID", type: "Positive"},
-            {service: "Referral - Side Effect", operation: "Create", endpoint: "/referralmanagement/side-effect/v1/_create", name: "test_create_side_effect_with_invalid_tenant_id", description: "Create side effect with invalid tenantId should fail", type: "Negative"},
-            {service: "Referral - Side Effect", operation: "Search", endpoint: "/referralmanagement/side-effect/v1/_search", name: "test_search_side_effect_with_invalid_tenant_id", description: "Search side effect with invalid tenantId should fail", type: "Negative"},
-            {service: "Referral - Side Effect", operation: "Update", endpoint: "/referralmanagement/side-effect/v1/_update", name: "test_update_side_effect", description: "Update side effect symptoms", type: "Positive"},
-            {service: "Referral - Side Effect", operation: "Delete", endpoint: "/referralmanagement/side-effect/v1/_delete", name: "test_delete_side_effect", description: "Delete side effect (soft delete)", type: "Positive"},
             {service: "Referral - Referral", operation: "Create", endpoint: "/referralmanagement/v1/_create", name: "test_create_referral", description: "Create a new referral", type: "Positive"},
             {service: "Referral - Referral", operation: "Search", endpoint: "/referralmanagement/v1/_search", name: "test_search_referral", description: "Search for a referral by ID", type: "Positive"},
             {service: "Referral - Referral", operation: "Create", endpoint: "/referralmanagement/v1/_create", name: "test_create_referral_with_invalid_tenant_id", description: "Create referral with invalid tenantId should fail", type: "Negative"},
