@@ -1,0 +1,30 @@
+{
+    "CampaignDetails": {
+        "id": "",
+        "tenantId": "",
+        "status": "drafted",
+        "action": "create",
+        "campaignNumber": "",
+        "isActive": true,
+        "parentId": null,
+        "campaignName": "",
+        "projectType": "",
+        "hierarchyType": "",
+        "boundaryCode": "",
+        "projectId": null,
+        "startDate": 0,
+        "endDate": 0,
+        "additionalDetails": {
+            "beneficiaryType": "",
+            "key": 10,
+            "cycleData": {
+                "cycleConfgureDate": {},
+                "cycleData": []
+            }
+        },
+        "resources": [],
+        "boundaries": [],
+        "deliveryRules": []
+    },
+    "RequestInfo": {}
+}

@@ -1,13 +1,12 @@
 {
   "serviceCode": [
-    "NoWater",
     "SyncNotWorking",
     "NotEnoughStock",
+    "PerformanceIssue",
+    "SecurityIssues",
+    "DataIssues",
     "TechnicalIssues",
     "UserAccountIssues",
-    "DataIssues",
-    "SecurityIssues",
-    "PerformanceIssue",
     "Other"
   ],
   "houseStructureTypes": [

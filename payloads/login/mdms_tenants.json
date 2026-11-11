@@ -1,0 +1,16 @@
+{
+    "RequestInfo": {},
+    "MdmsCriteria": {
+        "tenantId": "{{tenantId}}",
+        "moduleDetails": [
+            {
+                "moduleName": "tenant",
+                "masterDetails": [
+                    {
+                        "name": "tenants"
+                    }
+                ]
+            }
+        ]
+    }
+}

@@ -1,0 +1,23 @@
+{
+    "CampaignDetails": {
+        "hierarchyType": "",
+        "tenantId": "",
+        "action": "draft",
+        "parentId": null,
+        "campaignName": "",
+        "resources": [],
+        "projectType": "",
+        "startDate": 0,
+        "endDate": 0,
+        "isActive": true,
+        "status": "drafted",
+        "additionalDetails": {
+            "key": 2,
+            "cycleData": {
+                "cycleData": [],
+                "cycleConfgureDate": {}
+            }
+        }
+    },
+    "RequestInfo": {}
+}

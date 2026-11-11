@@ -76,6 +76,19 @@
             outline: none;
             border-color: #667eea;
         }
+        .tabs { display:flex; gap:4px; margin:24px 0 0; border-bottom:2px solid #e0e0e0; }
+        .tab-btn { padding:12px 22px; border:none; background:transparent; cursor:pointer;
+                   font-size:15px; font-weight:600; color:#666; border-bottom:3px solid transparent;
+                   margin-bottom:-2px; transition:all .15s; }
+        .tab-btn:hover { color:#c84c0c; }
+        .tab-btn.active { color:#c84c0c; border-bottom-color:#c84c0c; }
+        .tab-panel { display:none; }
+        .tab-panel.active { display:block; }
+        .notice { background:#fff8e6; border-left:4px solid #f0a000; padding:14px 18px;
+                  margin:18px 0; border-radius:4px; font-size:14px; line-height:1.6; }
+        .notice strong { color:#8a5a00; }
+        .badge-gap { background:#fde2e2; color:#a12020; }
+        .badge-step { background:#e3ecfa; color:#20458a; }
         .table-container {
             background: white;
             border-radius: 10px;
@@ -243,6 +256,12 @@
             </select>
         </div>
 
+        <div class="tabs">
+            <button class="tab-btn active" onclick="showTab('active', this)">Active Test Cases</button>
+            <button class="tab-btn" onclick="showTab('excluded', this)">Excluded &mdash; Known Issues (15)</button>
+        </div>
+
+        <div id="tab-active" class="tab-panel active">
         <div class="table-container">
             <table id="testCasesTable">
                 <thead>
@@ -260,6 +279,190 @@
                 </tbody>
             </table>
             <div class="count-display" id="countDisplay">Showing all 113 test cases</div>
+        </div>
+        </div>
+
+        <div id="tab-excluded" class="tab-panel">
+            <div class="notice">
+                <strong>Why these are excluded.</strong>
+                Two groups, neither a test defect.<br>
+                <strong>1. Missing server-side validation (14).</strong> Each sends input the
+                HCM Admin Console UI rejects, which the project-factory API accepts with
+                <code>200 successful</code>. Anything driving the API directly can create
+                malformed campaigns. Restore once validation is added.<br>
+                <strong>2. Environment (1).</strong> <code>test_app_configuration_toggle_off</code>
+                cannot pass while the only <code>HCM.APP_CONFIG</code> record on this
+                environment is cross-tenant. Restore once the record is fixed &mdash;
+                <code>utils/console.py:update_app_config</code> is kept for that purpose.<br>
+                Verified on <code>hcm-demo.digit.org</code> (tenant <code>demo</code>,
+                types <code>BEDNET</code> + <code>MR-DN</code>) on 2026-09-05.
+                Also in <code>test_cases_excluded.csv</code> and
+                <code>docs/MR_DN_CAMPAIGN_TEST_CASES.md</code> &sect;3.6&ndash;3.7.
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th><th>Wizard Step</th><th>Endpoint</th>
+                            <th>Test Case Name</th><th>Scenario</th>
+                            <th>Expected</th><th>Actual</th><th>Reason</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>1</td>
+                            <td><span class="badge badge-step">Boundary selection</span></td>
+                            <td><span class="endpoint">/project-factory/v1/project-type/update</span></td>
+                            <td><code>test_boundary_selection_without_any_selection</code></td>
+                            <td>Boundary step submitted with no selection at all</td>
+                            <td>4xx rejection</td>
+                            <td><span class="badge badge-gap">200 successful</span></td>
+                            <td>Missing server-side validation in project-factory</td>
+                        </tr>
+                        <tr>
+                            <td>2</td>
+                            <td><span class="badge badge-step">Boundary selection</span></td>
+                            <td><span class="endpoint">/project-factory/v1/project-type/update</span></td>
+                            <td><code>test_boundary_selection_with_partial_selection</code></td>
+                            <td>Partial boundary selection (hierarchy path incomplete)</td>
+                            <td>4xx rejection</td>
+                            <td><span class="badge badge-gap">200 successful</span></td>
+                            <td>Missing server-side validation in project-factory</td>
+                        </tr>
+                        <tr>
+                            <td>3</td>
+                            <td><span class="badge badge-step">Boundary selection</span></td>
+                            <td><span class="endpoint">/project-factory/v1/project-type/update</span></td>
+                            <td><code>test_boundary_selection_missing_lowest_level</code></td>
+                            <td>Boundary path stops above the lowest level</td>
+                            <td>4xx rejection</td>
+                            <td><span class="badge badge-gap">200 successful</span></td>
+                            <td>Missing server-side validation in project-factory</td>
+                        </tr>
+                        <tr>
+                            <td>4</td>
+                            <td><span class="badge badge-step">Boundary selection</span></td>
+                            <td><span class="endpoint">/project-factory/v1/project-type/update</span></td>
+                            <td><code>test_boundary_selection_with_unknown_code</code></td>
+                            <td>Boundary code that does not exist in the hierarchy</td>
+                            <td>4xx rejection</td>
+                            <td><span class="badge badge-gap">200 successful</span></td>
+                            <td>Missing server-side validation in project-factory</td>
+                        </tr>
+                        <tr>
+                            <td>5</td>
+                            <td><span class="badge badge-step">Delivery rules</span></td>
+                            <td><span class="endpoint">/project-factory/v1/project-type/update</span></td>
+                            <td><code>test_delivery_rules_with_first_start_date_only</code></td>
+                            <td>First cycle has a start date but no end date</td>
+                            <td>4xx rejection</td>
+                            <td><span class="badge badge-gap">200 successful</span></td>
+                            <td>Missing server-side validation in project-factory</td>
+                        </tr>
+                        <tr>
+                            <td>6</td>
+                            <td><span class="badge badge-step">Delivery rules</span></td>
+                            <td><span class="endpoint">/project-factory/v1/project-type/update</span></td>
+                            <td><code>test_delivery_rules_without_any_dates</code></td>
+                            <td>Delivery cycles submitted with no dates</td>
+                            <td>4xx rejection</td>
+                            <td><span class="badge badge-gap">200 successful</span></td>
+                            <td>Missing server-side validation in project-factory</td>
+                        </tr>
+                        <tr>
+                            <td>7</td>
+                            <td><span class="badge badge-step">Delivery rules</span></td>
+                            <td><span class="endpoint">/project-factory/v1/project-type/update</span></td>
+                            <td><code>test_delivery_rules_with_invalid_input</code></td>
+                            <td>Non-numeric dose quantity ('abc')</td>
+                            <td>4xx rejection</td>
+                            <td><span class="badge badge-gap">200 successful</span></td>
+                            <td>Missing server-side validation in project-factory</td>
+                        </tr>
+                        <tr>
+                            <td>8</td>
+                            <td><span class="badge badge-step">Delivery rules</span></td>
+                            <td><span class="endpoint">/project-factory/v1/project-type/update</span></td>
+                            <td><code>test_delivery_rules_with_zero_input</code></td>
+                            <td>Dose quantity of zero</td>
+                            <td>4xx rejection</td>
+                            <td><span class="badge badge-gap">200 successful</span></td>
+                            <td>Missing server-side validation in project-factory</td>
+                        </tr>
+                        <tr>
+                            <td>9</td>
+                            <td><span class="badge badge-step">Delivery rules</span></td>
+                            <td><span class="endpoint">/project-factory/v1/project-type/update</span></td>
+                            <td><code>test_delivery_rules_with_empty_input</code></td>
+                            <td>Blank dose quantity</td>
+                            <td>4xx rejection</td>
+                            <td><span class="badge badge-gap">200 successful</span></td>
+                            <td>Missing server-side validation in project-factory</td>
+                        </tr>
+                        <tr>
+                            <td>10</td>
+                            <td><span class="badge badge-step">Delivery rules</span></td>
+                            <td><span class="endpoint">/project-factory/v1/project-type/update</span></td>
+                            <td><code>test_delivery_rules_with_no_rules</code></td>
+                            <td>Delivery step submitted with no rules</td>
+                            <td>4xx rejection</td>
+                            <td><span class="badge badge-gap">200 successful</span></td>
+                            <td>Missing server-side validation in project-factory</td>
+                        </tr>
+                        <tr>
+                            <td>11</td>
+                            <td><span class="badge badge-step">Draft campaign</span></td>
+                            <td><span class="endpoint">/project-factory/v1/project-type/create</span></td>
+                            <td><code>test_draft_campaign_without_dates</code></td>
+                            <td>Draft submitted with no start or end date</td>
+                            <td>4xx rejection</td>
+                            <td><span class="badge badge-gap">200 successful</span></td>
+                            <td>Missing server-side validation in project-factory</td>
+                        </tr>
+                        <tr>
+                            <td>12</td>
+                            <td><span class="badge badge-step">Draft campaign</span></td>
+                            <td><span class="endpoint">/project-factory/v1/project-type/create</span></td>
+                            <td><code>test_draft_campaign_with_start_date_only</code></td>
+                            <td>Draft submitted with only a start date</td>
+                            <td>4xx rejection</td>
+                            <td><span class="badge badge-gap">200 successful</span></td>
+                            <td>Missing server-side validation in project-factory</td>
+                        </tr>
+                        <tr>
+                            <td>13</td>
+                            <td><span class="badge badge-step">Draft campaign</span></td>
+                            <td><span class="endpoint">/project-factory/v1/project-type/create</span></td>
+                            <td><code>test_draft_campaign_with_end_date_only</code></td>
+                            <td>Draft submitted with only an end date</td>
+                            <td>4xx rejection</td>
+                            <td><span class="badge badge-gap">200 successful</span></td>
+                            <td>Missing server-side validation in project-factory</td>
+                        </tr>
+                        <tr>
+                            <td>14</td>
+                            <td><span class="badge badge-step">Draft campaign</span></td>
+                            <td><span class="endpoint">/project-factory/v1/project-type/create</span></td>
+                            <td><code>test_draft_campaign_with_end_before_start</code></td>
+                            <td>End date earlier than the start date</td>
+                            <td>4xx rejection</td>
+                            <td><span class="badge badge-gap">200 successful</span></td>
+                            <td>Missing server-side validation in project-factory</td>
+                        </tr>
+                        <tr>
+                            <td>15</td>
+                            <td><span class="badge badge-step">App configuration</span></td>
+                            <td><span class="endpoint">/mdms-v2/v2/_update/HCM.APP_CONFIG</span></td>
+                            <td><code>test_app_configuration_toggle_off</code></td>
+                            <td>Toggle a boolean app-config field off, then restore it</td>
+                            <td>200 (write succeeds)</td>
+                            <td><span class="badge badge-gap">401 Unauthorized</span></td>
+                            <td>Environment: the only HCM.APP_CONFIG record is stored under tenantId=demo but carries uniqueIdentifier/TENANT_ID = mz, so the demo account cannot write it</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="count-display">15 excluded test cases</div>
+            </div>
         </div>
     </div>
 
@@ -403,6 +606,13 @@
             {service: "Stock Reconciliation", operation: "Update", endpoint: "/stock/reconciliation/v1/_update", name: "test_update_stock_reconciliation", description: "Update stock reconciliation physicalCount", type: "Positive"},
             {service: "Stock Reconciliation", operation: "Delete", endpoint: "/stock/reconciliation/v1/_delete", name: "test_delete_stock_reconciliation", description: "Delete stock reconciliation (soft delete)", type: "Positive"}
         ];
+
+        function showTab(which, btn) {
+            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('tab-' + which).classList.add('active');
+            btn.classList.add('active');
+        }
 
         // Populate service filter
         const services = [...new Set(testCases.map(tc => tc.service))].sort();

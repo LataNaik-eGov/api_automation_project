@@ -1,0 +1,9 @@
+{
+    "BoundaryTypeHierarchySearchCriteria": {
+        "tenantId": "",
+        "hierarchyType": "",
+        "limit": 10,
+        "offset": 0
+    },
+    "RequestInfo": {}
+}

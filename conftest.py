@@ -85,11 +85,17 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
         print(f"Warning: Could not generate dashboard: {e}")
 
 def pytest_runtest_logreport(report):
-    """Save failed request payload to output/failed_requests/ for failing tests."""
-    if report.when == "call" and report.outcome == "failed":
-        if hasattr(report, '_failed_request_data'):
-            error_msg = str(report.longrepr) if hasattr(report, 'longrepr') else "Unknown error"
-            _save_failed_request(report.nodeid, report._failed_request_data, error_msg)
+    """Persist the request/response of any failed test for debugging.
+
+    Result totals are built in pytest_terminal_summary from the reporter's own
+    stats, so nothing is accumulated here.
+    """
+    if report.when != "call" or report.outcome != "failed":
+        return
+
+    error = str(report.longrepr) if hasattr(report, "longrepr") else "Unknown error"
+    if hasattr(report, "_failed_request_data"):
+        _save_failed_request(report.nodeid, report._failed_request_data, error)
 
 
 def _save_failed_request(nodeid, request_data, error_message):
