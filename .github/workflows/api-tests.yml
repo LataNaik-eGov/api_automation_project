@@ -2,10 +2,8 @@ name: API Tests
 
 on:
   push:
-    branches: [main, product]
-  pull_request:
     branches: [main]
-  workflow_dispatch:  # Allows manual trigger
+  workflow_dispatch:  # Manual trigger; the job only runs when main is selected
 
 permissions:
   contents: read
@@ -14,6 +12,7 @@ permissions:
 
 jobs:
   test:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
