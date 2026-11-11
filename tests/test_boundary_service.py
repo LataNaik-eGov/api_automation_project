@@ -11,7 +11,7 @@ def test_search_boundary():
     token = get_auth_token("user")
     client = APIClient(token=token)
 
-    res = search_boundary_data(token, client, tenantId, "COUNTRY", hierarchyType)
+    res = search_boundary_data(token, client, tenantId, hierarchyType)
     assert res.status_code == 200, f"Boundary search failed: {res.text}"
 
     data = res.json()
@@ -35,6 +35,41 @@ def test_search_boundary():
             f.write(f"{b_type}: {code}\n")
 
 
+@pytest.mark.positive
+def test_fetch_boundary_codes_per_level():
+    """Fetch the first boundary code at each level of the hierarchy and save to ids.txt."""
+    token = get_auth_token("user")
+    client = APIClient(token=token)
+
+    res = search_boundary_data(token, client, tenantId, hierarchyType)
+    assert res.status_code == 200, f"Boundary search failed: {res.text}"
+
+    tenant_boundaries = res.json().get("TenantBoundary", [])
+    assert tenant_boundaries, "No TenantBoundary found in response"
+
+    boundaries_tree = tenant_boundaries[0].get("boundary", [])
+    assert boundaries_tree, "No boundary data found"
+
+    # Follow the first child at each depth to get one code per level
+    levels = []
+    current = boundaries_tree
+    while current:
+        first = current[0]
+        levels.append((first.get("boundaryType"), first.get("code")))
+        current = first.get("children") or []
+
+    assert levels, "Could not extract any boundary levels"
+
+    print(f"\nBoundary codes per level ({len(levels)} levels):")
+    for btype, code in levels:
+        print(f"  {btype}: {code}")
+
+    with open("output/ids.txt", "a") as f:
+        f.write("\n--- Boundary Codes Per Level ---\n")
+        for btype, code in levels:
+            f.write(f"Boundary {btype}: {code}\n")
+
+
 @pytest.mark.negative
 def test_search_boundary_with_invalid_tenant_id():
     """Negative test: Searching boundary with invalid tenantId should fail"""
@@ -47,7 +82,7 @@ def test_search_boundary_with_invalid_tenant_id():
     url = (
         f"/boundary-service/boundary-relationships/_search"
         f"?tenantId={invalidTenantId}&includeChildren=true"
-        f"&boundaryType=COUNTRY&hierarchyType={hierarchyType}"
+        f"&hierarchyType={hierarchyType}"
     )
 
     response = client.post(url, payload)
@@ -66,15 +101,20 @@ def collect_boundary_info(boundaries, results=None):
     return results
 
 
-def search_boundary_data(token, client, tenant_id, boundary_type, hierarchy_type):
+def search_boundary_data(token, client, tenant_id, hierarchy_type):
+    """Search the full boundary tree for a hierarchy, starting at its actual root.
+
+    boundaryType is intentionally omitted: root-level names differ across
+    hierarchies (e.g. COUNTRY, PAYS), and the API returns the full tree from
+    the true root when it's left unset.
+    """
     payload = load_payload("boundary", "search_boundary.json")
-    print("hierarchy_type", hierarchy_type)
     payload["RequestInfo"] = get_request_info(token)
 
     url = (
         f"/boundary-service/boundary-relationships/_search"
         f"?tenantId={tenant_id}&includeChildren=true"
-        f"&boundaryType={boundary_type}&hierarchyType={hierarchy_type}"
+        f"&hierarchyType={hierarchy_type}"
     )
 
     response = client.post(url, payload)

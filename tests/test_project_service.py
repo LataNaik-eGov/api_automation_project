@@ -1,11 +1,14 @@
 import uuid
+import random
+import string
 import pytest
+from datetime import datetime, timedelta
 from utils.api_client import APIClient
 from utils.data_loader import load_payload
 from utils.auth import get_auth_token
 from utils.request_info import get_request_info
-from utils.search_helpers import search_entity, extract_id_from_file, poll_until_found, poll_until_match
-from utils.config import project, boundaryType, boundaryCode, tenantId, invalidTenantId
+from utils.search_helpers import search_entity, extract_id_from_file, extract_boundary_levels_from_file, poll_until_found, poll_until_match
+from utils.config import project, boundaryType, boundaryCode, tenantId, invalidTenantId, hierarchyType, hrms
 from tests.test_individual_service import create_individual
 from tests.test_household_service import create_household, create_household_member
 from tests.test_product_service import create_product, create_product_variant
@@ -73,6 +76,247 @@ def test_create_project():
         f.write(f"Project Facility ID 2: {project_facility_id_2}\n")
 
 
+def _extract_one_per_level(boundaries_tree):
+    """Walk the boundary tree following the first child at each depth.
+    Returns an ordered list of (boundaryType, code) — one entry per level."""
+    levels = []
+    current = boundaries_tree
+    while current:
+        first = current[0]
+        levels.append((first.get("boundaryType"), first.get("code")))
+        current = first.get("children") or []
+    return levels
+
+
+def _create_campaign_employee(token, client, role_code, role_name, btype, bcode, prefix="CAMP", extra_roles=None):
+    """Create an HRMS employee with a primary role (and optional extra roles) at the given boundary level.
+    Returns (userServiceUuid, userName) needed for project staff creation."""
+    payload = load_payload("hrms", "create_hrms.json")
+    payload["RequestInfo"] = get_request_info(token)
+
+    unique_code = f"{prefix}-" + ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+    suffix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+    mobile = str(random.randint(7000000000, 9999999999))
+
+    payload["Employees"][0]["code"] = unique_code
+    payload["Employees"][0]["tenantId"] = tenantId
+    payload["Employees"][0]["user"]["userName"] = unique_code
+    payload["Employees"][0]["user"]["name"] = f"{role_name}-{suffix}"
+    payload["Employees"][0]["user"]["mobileNumber"] = mobile
+    payload["Employees"][0]["user"]["emailId"] = f"{unique_code.lower()}@campaign.test"
+    payload["Employees"][0]["user"]["tenantId"] = tenantId
+
+    primary = {"code": role_code, "name": role_name, "tenantId": tenantId,
+               "labelKey": f"ACCESSCONTROL_ROLES_ROLES_{role_code}"}
+    jurisdiction_roles = [primary] + [
+        {"code": r["code"], "name": r["name"], "tenantId": tenantId,
+         "labelKey": f"ACCESSCONTROL_ROLES_ROLES_{r['code']}"}
+        for r in (extra_roles or [])
+    ]
+    user_roles = [{"code": r["code"], "name": r["name"], "tenantId": tenantId}
+                  for r in jurisdiction_roles]
+
+    payload["Employees"][0]["jurisdictions"] = [{
+        "hierarchy": hierarchyType,
+        "boundaryType": btype,
+        "boundary": bcode,
+        "tenantId": tenantId,
+        "roles": jurisdiction_roles
+    }]
+    payload["Employees"][0]["user"]["roles"] = user_roles
+
+    url = f"/{hrms}/employees/_create?tenantId={tenantId}"
+    response = client.post(url, payload)
+
+    if response.status_code not in [200, 202]:
+        raise Exception(f"Employee ({role_code}) creation failed: {response.text}")
+
+    emp = response.json()["Employees"][0]
+    return emp["user"]["userServiceUuid"], emp["user"]["userName"]
+
+
+def _compute_cycle_dates(num_cycles):
+    """Compute cycle start/end dates in epoch milliseconds.
+    Cycle 1 starts tomorrow; each cycle is 10 days; next cycle starts day after previous ends."""
+    tomorrow = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    dates = []
+    cycle_start = tomorrow
+    for _ in range(max(num_cycles, 1)):
+        cycle_end = cycle_start + timedelta(days=10)
+        dates.append((int(cycle_start.timestamp() * 1000), int(cycle_end.timestamp() * 1000)))
+        cycle_start = cycle_end
+    return dates
+
+
+def _apply_cycle_dates(payload, cycle_dates):
+    """Patch the cycles array in a project payload with computed dates.
+    Extends or trims the cycles list to match the number of computed cycles."""
+    cycles = payload["Projects"][0]["additionalDetails"]["projectType"].get("cycles", [])
+    template = cycles[0].copy() if cycles else {}
+    while len(cycles) < len(cycle_dates):
+        cycles.append(template.copy())
+    for j, (cs, ce) in enumerate(cycle_dates):
+        cycles[j]["startDate"] = cs
+        cycles[j]["endDate"] = ce
+    payload["Projects"][0]["additionalDetails"]["projectType"]["cycles"] = cycles[:len(cycle_dates)]
+    payload["Projects"][0]["startDate"] = cycle_dates[0][0]
+    payload["Projects"][0]["endDate"] = cycle_dates[-1][1]
+
+
+@pytest.mark.positive
+def test_configure_campaign_MR_DN():
+    """Fetches boundary hierarchy, creates one MR-DN project per level (top→bottom),
+    then creates one facility per top-5 level using that level's boundary code,
+    and maps each facility to the corresponding level's project."""
+    token = get_auth_token("user")
+    client = APIClient(token=token)
+
+    # Step 1: Fetch boundary hierarchy directly and extract one code per level
+    from tests.test_boundary_service import search_boundary_data
+    res = search_boundary_data(token, client, tenantId, hierarchyType)
+    assert res.status_code == 200, f"Boundary search failed: {res.text}"
+
+    tenant_boundaries = res.json().get("TenantBoundary", [])
+    assert tenant_boundaries, "No TenantBoundary found in response"
+
+    boundaries_tree = tenant_boundaries[0].get("boundary", [])
+    assert boundaries_tree, "No boundary data found in response"
+
+    levels = _extract_one_per_level(boundaries_tree)
+    assert levels, "Could not extract boundary levels from hierarchy"
+
+    print(f"\nBoundary hierarchy has {len(levels)} levels:")
+    for btype, code in levels:
+        print(f"  {btype}: {code}")
+
+    # Step 2: Fetch MR-DN project type from MDMS
+    project_types = _fetch_project_types()
+    mrdn_types = [(tid, tcode, nc, data) for tid, tcode, nc, data in project_types if tcode.upper() == "MR-DN"]
+    assert mrdn_types, "MR-DN project type not found in active MDMS project types"
+    is_mrdn = True
+    projectTypeId, _, num_cycles, mrdn_data = mrdn_types[0]
+
+    cycle_dates = _compute_cycle_dates(num_cycles)
+    print(f"  Project type: MR-DN | projectTypeId={projectTypeId} | cycles: {num_cycles}")
+
+    # Create one project per level from top down, chaining immediate parent ID
+    project_ids = []
+
+    for i, (btype, code) in enumerate(levels):
+        parent = project_ids[-1] if project_ids else None
+
+        payload = load_payload("project", "create_individual_project.json")
+        payload["RequestInfo"] = get_request_info(token)
+        payload["Projects"][0]["tenantId"] = tenantId
+        payload["Projects"][0]["projectTypeId"] = projectTypeId
+        payload["Projects"][0]["projectType"] = "MR-DN"
+        payload["Projects"][0]["projectSubType"] = "MR-DN"
+        payload["Projects"][0]["additionalDetails"]["projectType"] = mrdn_data.copy()
+        payload["Projects"][0]["address"]["tenantId"] = tenantId
+        payload["Projects"][0]["address"]["boundaryType"] = btype
+        payload["Projects"][0]["address"]["boundary"] = code
+        payload["Projects"][0]["address"]["locality"]["code"] = code
+        payload["Projects"][0]["parent"] = parent
+        _apply_cycle_dates(payload, cycle_dates)
+
+        url = f"/{project}/v1/_create"
+        response = client.post(url, payload)
+
+        assert response.status_code in [200, 202], \
+            f"Project creation failed at level {i} ({btype} / {code}), parent={parent}: {response.text}"
+
+        project_id = response.json()["Project"][0]["id"]
+        project_ids.append(project_id)
+        print(f"  Level {i} ({btype}): project_id={project_id}  parent={parent}")
+
+    print(f"\nProject hierarchy created across {len(levels)} levels")
+
+    # Step 3: Create one facility at each of the top 5 boundary levels
+    top5 = levels[:5]
+    facility_ids = []
+
+    print(f"\nCreating facilities at top {len(top5)} boundary levels:")
+    for i, (btype, code) in enumerate(top5):
+        fac_payload = load_payload("facility", "create_facility.json")
+        fac_payload["RequestInfo"] = get_request_info(token)
+        fac_payload["Facility"]["clientReferenceId"] = str(uuid.uuid4())
+        fac_payload["Facility"]["tenantId"] = tenantId
+        fac_payload["Facility"]["address"]["tenantId"] = tenantId
+        fac_payload["Facility"]["address"]["locality"]["code"] = code
+
+        fac_res = client.post("/facility/v1/_create", fac_payload)
+        assert fac_res.status_code in [200, 202], \
+            f"Facility creation failed at level {i} ({btype} / {code}): {fac_res.text}"
+
+        facility_id = fac_res.json()["Facility"]["id"]
+        facility_ids.append(facility_id)
+        print(f"  Level {i} ({btype}): facility_id={facility_id}")
+
+    # Step 4: Map each facility to the project at the same boundary level
+    project_facility_ids = []
+
+    print(f"\nCreating project-facility mappings for top {len(top5)} levels:")
+    for i, (facility_id, project_id) in enumerate(zip(facility_ids, project_ids[:5])):
+        btype = top5[i][0]
+        pf_id, _ = create_project_facility(token, client, project_id, facility_id)
+        project_facility_ids.append(pf_id)
+        print(f"  Level {i} ({btype}): project_facility_id={pf_id}")
+
+    # Step 5: Create users per level and map as project staff
+    print("\nCreating campaign users and project staff:")
+
+    # Warehouse Manager at top 5 levels (skips the last level of the hierarchy)
+    for i, (btype, code) in enumerate(top5):
+        uuid_wm, uname_wm = _create_campaign_employee(token, client, "WAREHOUSE_MANAGER", "Warehouse Manager", btype, code, prefix="WHM")
+        staff_id, _ = create_project_staff(token, client, project_ids[i], uuid_wm)
+        print(f"  Level {i} ({btype}): Warehouse Manager | username={uname_wm} | staff_id={staff_id}")
+
+    _dv_role = {"code": "DASHBOARD_VIEWER", "name": "Dashboard Viewer"}
+
+    # Level 0: National Supervisor (+ Dashboard Viewer role)
+    btype0, code0 = levels[0]
+    uuid_ns, uname_ns = _create_campaign_employee(token, client, "NATIONAL_SUPERVISOR", "National Supervisor", btype0, code0, prefix="NS", extra_roles=[_dv_role])
+    staff_id, _ = create_project_staff(token, client, project_ids[0], uuid_ns)
+    print(f"  Level 0 ({btype0}): National Supervisor + Dashboard Viewer | username={uname_ns} | staff_id={staff_id}")
+
+    # Level 1: Provincial Supervisor (+ Dashboard Viewer role)
+    if len(levels) > 1:
+        btype1, code1 = levels[1]
+        uuid_ps, uname_ps = _create_campaign_employee(token, client, "PROVINCIAL_SUPERVISOR", "Provincial Supervisor", btype1, code1, prefix="PS", extra_roles=[_dv_role])
+        staff_id, _ = create_project_staff(token, client, project_ids[1], uuid_ps)
+        print(f"  Level 1 ({btype1}): Provincial Supervisor + Dashboard Viewer | username={uname_ps} | staff_id={staff_id}")
+
+    # Level 2: District Supervisor (+ Dashboard Viewer role)
+    if len(levels) > 2:
+        btype2, code2 = levels[2]
+        uuid_ds, uname_ds = _create_campaign_employee(token, client, "DISTRICT_SUPERVISOR", "District Supervisor", btype2, code2, prefix="DS", extra_roles=[_dv_role])
+        staff_id, _ = create_project_staff(token, client, project_ids[2], uuid_ds)
+        print(f"  Level 2 ({btype2}): District Supervisor + Dashboard Viewer | username={uname_ds} | staff_id={staff_id}")
+
+    # Level 4 (5th level): Distributor + optionally Health Facility Worker if MR-DN
+    if len(top5) >= 5:
+        btype4, code4 = top5[4]
+        uuid_dist, uname_dist = _create_campaign_employee(token, client, "DISTRIBUTOR", "Distributor", btype4, code4, prefix="DIST")
+        staff_id, _ = create_project_staff(token, client, project_ids[4], uuid_dist)
+        print(f"  Level 4 ({btype4}): Distributor | username={uname_dist} | staff_id={staff_id}")
+
+        if is_mrdn:
+            uuid_hfw, uname_hfw = _create_campaign_employee(token, client, "HEALTH_FACILITY_WORKER", "Health Facility Worker", btype4, code4, prefix="HFW")
+            staff_id, _ = create_project_staff(token, client, project_ids[4], uuid_hfw)
+            print(f"  Level 4 ({btype4}): Health Facility Worker | username={uname_hfw} | staff_id={staff_id}")
+
+    with open("output/ids.txt", "a") as f:
+        f.write("\n--- Project Hierarchy ---\n")
+        for i, (pid, (btype, _)) in enumerate(zip(project_ids, levels)):
+            f.write(f"Project Hierarchy Level {i} ({btype}): {pid}\n")
+        f.write("\n--- Campaign Facilities ---\n")
+        for i, (fid, (btype, _)) in enumerate(zip(facility_ids, top5)):
+            f.write(f"Campaign Facility Level {i} ({btype}): {fid}\n")
+        f.write("\n--- Campaign Project Facilities ---\n")
+        for i, (pfid, (btype, _)) in enumerate(zip(project_facility_ids, top5)):
+            f.write(f"Campaign Project Facility Level {i} ({btype}): {pfid}\n")
+
+
 def _fetch_project_types():
     try:
         from tests.test_mdms_service import search_mdms_data
@@ -83,7 +327,7 @@ def _fetch_project_types():
             return []
         mdms_data = response.json().get("mdms", [])
         return [
-            (item["data"]["id"], item["data"]["code"])
+            (item["data"]["id"], item["data"]["code"], len(item["data"].get("cycles", [])), item["data"])
             for item in mdms_data
             if item.get("isActive") is True
         ]
@@ -91,7 +335,7 @@ def _fetch_project_types():
         return []
 
 
-def _make_project_type_test(type_id, type_code):
+def _make_project_type_test(type_id, type_code, num_cycles, type_data):
     @pytest.mark.positive
     def _test():
         token = get_auth_token("user")
@@ -99,20 +343,16 @@ def _make_project_type_test(type_id, type_code):
 
         payload = load_payload("project", "create_individual_project.json")
         payload["RequestInfo"] = get_request_info(token)
+        payload["Projects"][0]["tenantId"] = tenantId
         payload["Projects"][0]["projectTypeId"] = type_id
         payload["Projects"][0]["projectType"] = type_code
         payload["Projects"][0]["projectSubType"] = type_code
+        payload["Projects"][0]["address"]["tenantId"] = tenantId
         payload["Projects"][0]["address"]["boundaryType"] = boundaryType
         payload["Projects"][0]["address"]["boundary"] = boundaryCode
         payload["Projects"][0]["address"]["locality"]["code"] = boundaryCode
-        payload["Projects"][0]["additionalDetails"]["projectType"]["id"] = type_id
-        payload["Projects"][0]["additionalDetails"]["projectType"]["code"] = type_code
-        payload["Projects"][0]["startDate"] = 1767205799000
-        payload["Projects"][0]["endDate"] = 1787670131000
-        payload["Projects"][0]["additionalDetails"]["projectType"]["cycles"][0]["startDate"] = 1767205799000
-        payload["Projects"][0]["additionalDetails"]["projectType"]["cycles"][0]["endDate"] = 1787670131000
-        payload["Projects"][0]["additionalDetails"]["projectType"]["cycles"][1]["startDate"] = 1767205799000
-        payload["Projects"][0]["additionalDetails"]["projectType"]["cycles"][1]["endDate"] = 1787670131000
+        payload["Projects"][0]["additionalDetails"]["projectType"] = type_data.copy()
+        _apply_cycle_dates(payload, _compute_cycle_dates(num_cycles))
 
         url = f"/{project}/v1/_create"
         response = client.post(url, payload)
@@ -126,8 +366,8 @@ def _make_project_type_test(type_id, type_code):
     return test_name, _test
 
 
-for _type_id, _type_code in _fetch_project_types():
-    _test_name, _test_fn = _make_project_type_test(_type_id, _type_code)
+for _type_id, _type_code, _num_cycles, _type_data in _fetch_project_types():
+    _test_name, _test_fn = _make_project_type_test(_type_id, _type_code, _num_cycles, _type_data)
     globals()[_test_name] = _test_fn
 
 
@@ -1848,6 +2088,8 @@ def create_individual_project(token, client, boundaryType, boundaryCode, variant
     if projectTypeId:
         payload["Projects"][0]["projectTypeId"] = projectTypeId
         payload["Projects"][0]["additionalDetails"]["projectType"]["id"] = projectTypeId
+    payload["Projects"][0]["tenantId"] = tenantId
+    payload["Projects"][0]["address"]["tenantId"] = tenantId
     payload["Projects"][0]["address"]["boundaryType"] = boundaryType
     payload["Projects"][0]["address"]["boundary"] = boundaryCode
     payload["Projects"][0]["address"]["locality"]["code"] = boundaryCode
@@ -2247,6 +2489,8 @@ def create_individual_project_full(token, client, boundaryType, boundaryCode, va
     if projectTypeId:
         payload["Projects"][0]["projectTypeId"] = projectTypeId
         payload["Projects"][0]["additionalDetails"]["projectType"]["id"] = projectTypeId
+    payload["Projects"][0]["tenantId"] = tenantId
+    payload["Projects"][0]["address"]["tenantId"] = tenantId
     payload["Projects"][0]["address"]["boundaryType"] = boundaryType
     payload["Projects"][0]["address"]["boundary"] = boundaryCode
     payload["Projects"][0]["address"]["locality"]["code"] = boundaryCode

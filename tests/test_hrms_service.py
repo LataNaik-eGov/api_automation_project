@@ -6,7 +6,7 @@ from utils.data_loader import load_payload
 from utils.auth import get_auth_token
 from utils.request_info import get_request_info
 from utils.search_helpers import extract_id_from_file
-from utils.config import tenantId, hrms, invalidTenantId
+from utils.config import tenantId, hrms, invalidTenantId, hierarchyType, boundaryType, boundaryCode
 
 
 # --- Test functions ---
@@ -183,6 +183,9 @@ def create_employee(token, client):
     payload["Employees"][0]["user"]["tenantId"] = tenantId
     for jurisdiction in payload["Employees"][0].get("jurisdictions", []):
         jurisdiction["tenantId"] = tenantId
+        jurisdiction["hierarchy"] = hierarchyType
+        jurisdiction["boundaryType"] = boundaryType
+        jurisdiction["boundary"] = boundaryCode
         for role in jurisdiction.get("roles", []):
             role["tenantId"] = tenantId
     for role in payload["Employees"][0]["user"].get("roles", []):

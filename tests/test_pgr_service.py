@@ -10,7 +10,7 @@ from utils.api_client import APIClient
 from utils.data_loader import load_payload
 from utils.auth import get_auth_token, get_user_info
 from utils.request_info import get_request_info
-from utils.config import pgr, tenantId, search_limit, search_offset, mdms, hrms
+from utils.config import pgr, tenantId, search_limit, search_offset, mdms, hrms, hierarchyType, boundaryType, boundaryCode
 from utils.search_helpers import extract_id_from_file
 
 # Load environment variables
@@ -364,9 +364,9 @@ def create_complaint(token, client, tenant_id=None, service_code=None):
     payload["service"]["serviceCode"] = service_code
     print(f"Creating complaint with service code: {service_code}")
 
-    # Override tenantId if provided (for negative testing)
-    if tenant_id is not None:
-        payload["service"]["tenantId"] = tenant_id
+    # Use provided tenantId (negative testing) or the configured one
+    payload["service"]["tenantId"] = tenant_id if tenant_id is not None else tenantId
+    payload["service"]["hierarchyType"] = hierarchyType
 
     return client.post(f"/{pgr}/v2/request/_create", payload)
 
@@ -718,9 +718,20 @@ def create_pgr_employee(token, client):
 
     # Update employee code and username
     payload["Employees"][0]["code"] = unique_code
+    payload["Employees"][0]["tenantId"] = tenantId
     payload["Employees"][0]["user"]["userName"] = unique_code
     payload["Employees"][0]["user"]["mobileNumber"] = mobile_number
     payload["Employees"][0]["user"]["password"] = default_password
+    payload["Employees"][0]["user"]["tenantId"] = tenantId
+    for jurisdiction in payload["Employees"][0].get("jurisdictions", []):
+        jurisdiction["tenantId"] = tenantId
+        jurisdiction["hierarchy"] = hierarchyType
+        jurisdiction["boundaryType"] = boundaryType
+        jurisdiction["boundary"] = boundaryCode
+        for role in jurisdiction.get("roles", []):
+            role["tenantId"] = tenantId
+    for role in payload["Employees"][0]["user"].get("roles", []):
+        role["tenantId"] = tenantId
 
     # Ensure PGR-ADMIN role is included
     # The payload already has PGR-ADMIN role from the template

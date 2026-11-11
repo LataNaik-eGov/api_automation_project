@@ -57,3 +57,20 @@ def extract_id_from_file(label):
     with open("output/ids.txt", "r") as f:
         lines = f.readlines()
     return next((line.split(":", 1)[1].strip() for line in lines if line.startswith(label)), None)
+
+
+def extract_boundary_levels_from_file():
+    """Read all 'Boundary TYPE: code' entries from ids.txt in order.
+    Returns a list of (boundaryType, code) tuples."""
+    try:
+        with open("output/ids.txt", "r") as f:
+            lines = f.readlines()
+        levels = []
+        for line in lines:
+            if line.startswith("Boundary ") and ":" in line:
+                rest = line[len("Boundary "):]
+                btype, code = rest.split(":", 1)
+                levels.append((btype.strip(), code.strip()))
+        return levels
+    except FileNotFoundError:
+        return []
