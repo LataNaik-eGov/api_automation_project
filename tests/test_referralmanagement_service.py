@@ -4,7 +4,7 @@ from utils.api_client import APIClient
 from utils.data_loader import load_payload
 from utils.auth import get_auth_token
 from utils.request_info import get_request_info
-from utils.search_helpers import search_entity, extract_id_from_file
+from utils.search_helpers import search_entity, extract_id_from_file, poll_until_found, poll_until_match
 from utils.config import tenantId, boundaryType, boundaryCode, project, invalidTenantId
 from tests.test_individual_service import create_individual
 from tests.test_household_service import create_household, create_household_member
@@ -552,7 +552,7 @@ def test_create_referral_bulk():
     assert status_code == 202, f"Referral bulk creation failed with status: {status_code}"
     print("Bulk create accepted with 202")
 
-    referrals = search_referral_by_client_ref(token, client, client_ref_id)
+    referrals = poll_until_found(lambda: search_referral_by_client_ref(token, client, client_ref_id))
     assert referrals, f"No referral found with clientReferenceId {client_ref_id} after bulk create"
     assert referrals[0]["clientReferenceId"] == client_ref_id
     print(f"Verified: referral with clientReferenceId {client_ref_id} found in search results")
@@ -614,7 +614,10 @@ def test_update_referral_bulk():
     assert response.status_code == 202, f"Referral bulk update failed: {response.text}"
     print("Bulk update accepted with 202")
 
-    referrals = search_referral_by_client_ref(token, client, referral_data["clientReferenceId"])
+    referrals = poll_until_match(
+        lambda: search_referral_by_client_ref(token, client, referral_data["clientReferenceId"]),
+        lambda rs: rs[0].get("reasons") == new_reasons,
+    )
     assert referrals, f"Referral not found after bulk update"
     assert referrals[0].get("reasons") == new_reasons, f"reasons not updated. Got {referrals[0].get('reasons')}"
     print(f"Referral bulk updated successfully. reasons verified as {new_reasons}.")
@@ -752,7 +755,7 @@ def test_create_hf_referral_bulk():
     assert status_code == 202, f"HF Referral bulk creation failed with status: {status_code}"
     print("Bulk create accepted with 202")
 
-    hf_referrals = search_hf_referral_by_client_ref(token, client, client_ref_id)
+    hf_referrals = poll_until_found(lambda: search_hf_referral_by_client_ref(token, client, client_ref_id))
     assert hf_referrals, f"No HF referral found with clientReferenceId {client_ref_id} after bulk create"
     assert hf_referrals[0]["clientReferenceId"] == client_ref_id
     print(f"Verified: HF referral with clientReferenceId {client_ref_id} found in search results")
@@ -794,7 +797,10 @@ def test_update_hf_referral_bulk():
     assert response.status_code == 202, f"HF Referral bulk update failed: {response.text}"
     print("Bulk update accepted with 202")
 
-    hf_referrals = search_hf_referral_by_client_ref(token, client, hf_referral_data["clientReferenceId"])
+    hf_referrals = poll_until_match(
+        lambda: search_hf_referral_by_client_ref(token, client, hf_referral_data["clientReferenceId"]),
+        lambda hs: hs[0].get("symptom") == new_symptom,
+    )
     assert hf_referrals, f"HF Referral not found after bulk update"
     assert hf_referrals[0].get("symptom") == new_symptom, f"symptom not updated. Got {hf_referrals[0].get('symptom')}"
     print(f"HF Referral bulk updated successfully. symptom verified as '{new_symptom}'.")

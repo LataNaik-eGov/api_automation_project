@@ -1600,7 +1600,10 @@ def test_update_project_facility_bulk():
     print("Bulk update accepted with 202")
 
     # Step 3: Search by projectId and verify additionalFields updated
-    facilities = search_project_facility_by_project(token, client, project_id)
+    facilities = poll_until_match(
+        lambda: search_project_facility_by_project(token, client, project_id),
+        lambda fs: any(f.get("id") == project_facility_data["id"] and (f.get("additionalFields") or {}).get("schema") == "updated_schema" for f in fs),
+    )
     updated = next((f for f in facilities if f.get("id") == project_facility_data["id"]), None)
     assert updated is not None, f"Project Facility {project_facility_data['id']} not found after bulk update"
     assert updated.get("additionalFields", {}).get("schema") == "updated_schema", "additionalFields not updated"
@@ -1663,8 +1666,10 @@ def test_create_project_staff_bulk():
     print("Bulk create accepted with 202")
 
     # Step 3: Search by projectId and verify staff with matching userId exists
-    staff_list = search_project_staff_by_project(token, client, project_id)
-    matching = [s for s in staff_list if s.get("userId") == userservice_uuid]
+    matching = poll_until_found(lambda: [
+        s for s in search_project_staff_by_project(token, client, project_id)
+        if s.get("userId") == userservice_uuid
+    ])
     assert matching, f"No staff found with userId {userservice_uuid} after bulk create"
     print(f"Verified: staff with userId {userservice_uuid} found in search results")
 
@@ -1702,7 +1707,10 @@ def test_update_project_staff_bulk():
     print("Bulk update accepted with 202")
 
     # Step 3: Search and verify endDate was updated
-    staff_list = search_project_staff_by_project(token, client, project_id)
+    staff_list = poll_until_match(
+        lambda: search_project_staff_by_project(token, client, project_id),
+        lambda ss: any(s.get("id") == staff_data["id"] and s.get("endDate") == new_end_date for s in ss),
+    )
     updated = next((s for s in staff_list if s.get("id") == staff_data["id"]), None)
     assert updated is not None, f"Staff {staff_data['id']} not found after bulk update"
     assert updated.get("endDate") == new_end_date, f"endDate not updated. Expected {new_end_date}, got {updated.get('endDate')}"
@@ -1802,7 +1810,7 @@ def test_create_project_beneficiary_bulk():
     assert status_code == 202, f"Project Beneficiary bulk creation failed with status: {status_code}"
     print("Bulk create accepted with 202")
 
-    beneficiaries = search_project_beneficiary_by_client_ref(token, client, client_ref_id)
+    beneficiaries = poll_until_found(lambda: search_project_beneficiary_by_client_ref(token, client, client_ref_id))
     assert beneficiaries, f"No project beneficiary found with clientReferenceId {client_ref_id} after bulk create"
     assert beneficiaries[0]["clientReferenceId"] == client_ref_id
     print(f"Verified: project beneficiary with clientReferenceId {client_ref_id} found in search results")
@@ -1835,7 +1843,10 @@ def test_update_project_beneficiary_bulk():
     assert response.status_code == 202, f"Project Beneficiary bulk update failed: {response.text}"
     print("Bulk update accepted with 202")
 
-    beneficiaries = search_project_beneficiary_by_client_ref(token, client, beneficiary_data["clientReferenceId"])
+    beneficiaries = poll_until_match(
+        lambda: search_project_beneficiary_by_client_ref(token, client, beneficiary_data["clientReferenceId"]),
+        lambda bs: bs[0].get("tag") == new_tag,
+    )
     assert beneficiaries, f"Project Beneficiary not found after bulk update"
     assert beneficiaries[0].get("tag") == new_tag, f"tag not updated. Got {beneficiaries[0].get('tag')}"
     print(f"Project Beneficiary bulk updated successfully. tag verified as '{new_tag}'.")
