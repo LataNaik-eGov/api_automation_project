@@ -3,7 +3,7 @@ from utils.api_client import APIClient
 from utils.auth import get_auth_token
 from utils.data_loader import load_payload
 from utils.request_info import get_request_info
-from utils.search_helpers import search_entity, extract_id_from_file, poll_until_match
+from utils.search_helpers import search_entity, extract_id_from_file, poll_until_found, poll_until_match
 from utils.config import tenantId, boundaryCode, individual, invalidTenantId, search_limit, search_offset
 import uuid
 
@@ -165,7 +165,7 @@ def test_create_individual_bulk():
     assert status_code == 202, f"Individual bulk creation failed with status: {status_code}"
     print("Bulk create accepted with 202")
 
-    individuals = search_individual_by_client_ref(token, client, client_ref_id)
+    individuals = poll_until_found(lambda: search_individual_by_client_ref(token, client, client_ref_id))
     assert individuals, f"No individual found with clientReferenceId {client_ref_id} after bulk create"
     assert individuals[0]["clientReferenceId"] == client_ref_id
     print(f"Verified: individual with clientReferenceId {client_ref_id} found in search results")
