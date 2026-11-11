@@ -15,90 +15,11 @@ from tests.test_project_service import (
     create_project_beneficiary,
     create_project_task,
     create_project_facility,
-    search_project_beneficiary
 )
 from tests.test_facility_service import create_facility
 
 
 # --- Test functions ---
-
-@pytest.mark.positive
-def test_create_side_effect():
-    token = get_auth_token("user")
-    client = APIClient(token=token)
-
-    # Create new product variant
-    variant_response = create_product_variant(token, client)
-    assert variant_response.status_code in [200, 202], f"Product Variant creation failed: {variant_response.status_code}"
-    variant_id = variant_response.json()["ProductVariant"][0]["id"]
-
-    # Create new project with the product variant
-    project_id, project_status = create_individual_project(token, client, boundaryType, boundaryCode, variant_id, variant_id)
-    assert project_status in [200, 202], f"Project creation failed with status: {project_status}"
-
-    # Create project resource mapping for the variant
-    _, resource_status = create_project_resource(token, client, project_id, variant_id)
-    assert resource_status in [200, 202], f"Project Resource creation failed with status: {resource_status}"
-
-    # Create new household
-    household_id, household_client_ref_id, household_status = create_household(token, client)
-    assert household_status in [200, 202], f"Household creation failed with status: {household_status}"
-
-    # Create new individual
-    individual_id, individual_client_ref_id, _, individual_status = create_individual(token, client)
-    assert individual_status in [200, 202], f"Individual creation failed with status: {individual_status}"
-
-    # Create new household member
-    member_response = create_household_member(token, client, household_id, household_client_ref_id, individual_id, individual_client_ref_id)
-    assert member_response.status_code in [200, 202], f"Household Member creation failed with status: {member_response.status_code}"
-
-    # Create new project beneficiary
-    beneficiary_id, beneficiary_client_ref_id, beneficiary_status = create_project_beneficiary(token, client, project_id, individual_id, individual_client_ref_id)
-    assert beneficiary_status in [200, 202], f"Project Beneficiary creation failed with status: {beneficiary_status}"
-
-    # Create project task
-    task_id, task_client_ref_id, task_status = create_project_task(token, client, project_id, beneficiary_id, beneficiary_client_ref_id, variant_id)
-    assert task_status in [200, 202], f"Project Task creation failed with status: {task_status}"
-
-    # Create side effect
-    side_effect_id, _, status_code = create_side_effect(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id)
-    assert status_code in [200, 202], f"Side Effect creation failed with status: {status_code}"
-
-    print("Side Effect created with ID:", side_effect_id)
-
-    with open("output/ids.txt", "a") as f:
-        f.write("\n--- Side Effect details ---\n")
-        f.write(f"Side Effect ID: {side_effect_id}\n")
-
-
-@pytest.mark.positive
-def test_search_side_effect():
-    """Test to search for a side effect by ID. Uses existing side effect if ID not found in file."""
-    token = get_auth_token("user")
-    client = APIClient(token=token)
-
-    side_effect_id = extract_id_from_file("Side Effect ID:")
-    if not side_effect_id:
-        # Use existing side effect from system (async create takes too long to be searchable)
-        print("Side Effect ID not found in file, fetching existing side effect...")
-        existing_side_effects = search_side_effect_all(token, client)
-        assert existing_side_effects, "No existing Side Effects found in system"
-        side_effect_id = existing_side_effects[0]["id"]
-        print(f"Using existing Side Effect ID: {side_effect_id}")
-
-    side_effects = search_entity(
-        entity_type="referralmanagement/side_effect",
-        token=token,
-        client=client,
-        entity_id=side_effect_id,
-        payload_file="search_side_effect.json",
-        endpoint=f"/referralmanagement/side-effect/v1/_search",
-        response_key="SideEffects"
-    )
-
-    assert side_effect_id in [s["id"] for s in side_effects], "Side Effect not found"
-    print("Side Effect found with ID:", side_effect_id)
-
 
 @pytest.mark.positive
 def test_create_referral():
@@ -147,12 +68,9 @@ def test_create_referral():
     task_id, task_client_ref_id, task_status = create_project_task(token, client, project_id, beneficiary_id, beneficiary_client_ref_id, variant_id)
     assert task_status in [200, 202], f"Project Task creation failed with status: {task_status}"
 
-    # Create side effect
-    side_effect_id, side_effect_client_ref_id, side_effect_status = create_side_effect(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id)
-    assert side_effect_status in [200, 202], f"Side Effect creation failed with status: {side_effect_status}"
 
-    # Create referral using side effect details and mapped facility
-    referral_id, status_code = create_referral(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id, side_effect_id, side_effect_client_ref_id, facility_id)
+    # Create referral to the mapped facility
+    referral_id, status_code = create_referral(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id, facility_id)
     assert status_code in [200, 202], f"Referral creation failed with status: {status_code}"
 
     print("Referral created with ID:", referral_id)
@@ -275,7 +193,7 @@ def _create_task_dependencies(token, client):
 
 
 @pytest.mark.negative
-def test_create_side_effect_with_invalid_tenant_id():
+def test_create_referral_with_invalid_tenant_id():
     token = get_auth_token("user")
     client = APIClient(token=token)
 
@@ -286,42 +204,6 @@ def test_create_side_effect_with_invalid_tenant_id():
     if not task_id or not task_client_ref_id or not beneficiary_id:
         task_id, task_client_ref_id, beneficiary_id, _, _ = _create_task_dependencies(token, client)
 
-    payload = load_payload("referralmanagement/side_effect", "create_side_effect.json")
-    payload["RequestInfo"] = get_request_info(token)
-    payload["SideEffect"]["tenantId"] = "invalid.tenant.id"
-    payload["SideEffect"]["clientReferenceId"] = str(uuid.uuid4())
-    payload["SideEffect"]["taskId"] = task_id
-    payload["SideEffect"]["taskClientReferenceId"] = task_client_ref_id
-    payload["SideEffect"]["projectBeneficiaryId"] = beneficiary_id
-    payload["SideEffect"]["projectBeneficiaryClientReferenceId"] = str(uuid.uuid4())
-    payload["SideEffect"]["symptoms"] = ["FEVER", "VOMITING"]
-
-    url = f"/{project}/side-effect/v1/_create"
-    response = client.post(url, payload)
-
-    assert response.status_code in [401], f"Expected error status code, got: {response.status_code}"
-    print(f"Request correctly rejected with status: {response.status_code}")
-
-
-@pytest.mark.negative
-def test_create_referral_with_invalid_tenant_id():
-    token = get_auth_token("user")
-    client = APIClient(token=token)
-
-    task_id = extract_id_from_file("Project Task ID:")
-    task_client_ref_id = extract_id_from_file("Project Task Client Reference ID:")
-    beneficiary_id = extract_id_from_file("Project Beneficiary ID:")
-    side_effect_id = extract_id_from_file("Side Effect ID:")
-
-    if not task_id or not task_client_ref_id or not beneficiary_id:
-        task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id, _ = _create_task_dependencies(token, client)
-    else:
-        beneficiaries = search_project_beneficiary(token, client, beneficiary_id)
-        beneficiary_client_ref_id = beneficiaries[0]["clientReferenceId"] if beneficiaries else str(uuid.uuid4())
-
-    if not side_effect_id:
-        side_effect_id, _, _ = create_side_effect(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id)
-
     payload = load_payload("referralmanagement/referral", "create_referral.json")
     payload["RequestInfo"] = get_request_info(token)
     payload["Referral"]["tenantId"] = "invalid.tenant.id"
@@ -330,8 +212,6 @@ def test_create_referral_with_invalid_tenant_id():
     payload["Referral"]["taskClientReferenceId"] = task_client_ref_id
     payload["Referral"]["projectBeneficiaryId"] = beneficiary_id
     payload["Referral"]["projectBeneficiaryClientReferenceId"] = str(uuid.uuid4())
-    payload["Referral"]["sideEffectId"] = side_effect_id
-    payload["Referral"]["sideEffectClientReferenceId"] = str(uuid.uuid4())
     payload["Referral"]["recipientType"] = "FACILITY"
     payload["Referral"]["recipientId"] = str(uuid.uuid4())
     payload["Referral"]["reasons"] = ["FEVER", "VOMITING"]
@@ -376,37 +256,6 @@ def test_create_hf_referral_with_invalid_tenant_id():
 
 
 @pytest.mark.negative
-def test_search_side_effect_with_invalid_tenant_id():
-    token = get_auth_token("user")
-    client = APIClient(token=token)
-
-    side_effect_id = extract_id_from_file("Side Effect ID:")
-    if not side_effect_id:
-        # Create side effect with all dependencies if not found
-        variant_response = create_product_variant(token, client)
-        assert variant_response.status_code in [200, 202], f"Product Variant creation failed"
-        variant_id = variant_response.json()["ProductVariant"][0]["id"]
-        project_id, _ = create_individual_project(token, client, boundaryType, boundaryCode, variant_id, variant_id)
-        create_project_resource(token, client, project_id, variant_id)
-        household_id, household_client_ref_id, _ = create_household(token, client)
-        individual_id, individual_client_ref_id, _, _ = create_individual(token, client)
-        create_household_member(token, client, household_id, household_client_ref_id, individual_id, individual_client_ref_id)
-        beneficiary_id, beneficiary_client_ref_id, _ = create_project_beneficiary(token, client, project_id, individual_id, individual_client_ref_id)
-        task_id, task_client_ref_id, _ = create_project_task(token, client, project_id, beneficiary_id, beneficiary_client_ref_id, variant_id)
-        side_effect_id, _, _ = create_side_effect(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id)
-
-    payload = load_payload("referralmanagement/side_effect", "search_side_effect.json")
-    payload["RequestInfo"] = get_request_info(token)
-    payload["SideEffect"]["id"] = [side_effect_id]
-
-    url = f"/referralmanagement/side-effect/v1/_search?tenantId={invalidTenantId}"
-    response = client.post(url, payload)
-
-    assert response.status_code in [400, 401, 403], f"Expected error status code, got: {response.status_code}"
-    print(f"Search correctly rejected with status: {response.status_code}")
-
-
-@pytest.mark.negative
 def test_search_referral_with_invalid_tenant_id():
     token = get_auth_token("user")
     client = APIClient(token=token)
@@ -428,8 +277,7 @@ def test_search_referral_with_invalid_tenant_id():
         create_household_member(token, client, household_id, household_client_ref_id, individual_id, individual_client_ref_id)
         beneficiary_id, beneficiary_client_ref_id, _ = create_project_beneficiary(token, client, project_id, individual_id, individual_client_ref_id)
         task_id, task_client_ref_id, _ = create_project_task(token, client, project_id, beneficiary_id, beneficiary_client_ref_id, variant_id)
-        side_effect_id, side_effect_client_ref_id, _ = create_side_effect(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id)
-        referral_id, _ = create_referral(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id, side_effect_id, side_effect_client_ref_id, facility_id)
+        referral_id, _ = create_referral(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id, facility_id)
 
     payload = load_payload("referralmanagement/referral", "search_referral.json")
     payload["RequestInfo"] = get_request_info(token)
@@ -469,66 +317,6 @@ def test_search_hf_referral_with_invalid_tenant_id():
 
     assert response.status_code in [400, 401, 403], f"Expected error status code, got: {response.status_code}"
     print(f"Search correctly rejected with status: {response.status_code}")
-
-
-@pytest.mark.positive
-def test_update_side_effect():
-    """Test to update a side effect. Creates all dependencies internally first, then updates symptoms."""
-    token = get_auth_token("user")
-    client = APIClient(token=token)
-
-    # Step 1: Create all dependencies internally
-    print("Creating product variant...")
-    variant_response = create_product_variant(token, client)
-    assert variant_response.status_code in [200, 202], f"Product Variant creation failed"
-    variant_id = variant_response.json()["ProductVariant"][0]["id"]
-
-    print("Creating project...")
-    project_id, project_status = create_individual_project(token, client, boundaryType, boundaryCode, variant_id, variant_id)
-    assert project_status in [200, 202], f"Project creation failed"
-
-    print("Creating project resource...")
-    _, resource_status = create_project_resource(token, client, project_id, variant_id)
-    assert resource_status in [200, 202], f"Project Resource creation failed"
-
-    print("Creating household...")
-    household_id, household_client_ref_id, household_status = create_household(token, client)
-    assert household_status in [200, 202], f"Household creation failed"
-
-    print("Creating individual...")
-    individual_id, individual_client_ref_id, _, individual_status = create_individual(token, client)
-    assert individual_status in [200, 202], f"Individual creation failed"
-
-    print("Creating household member...")
-    member_response = create_household_member(token, client, household_id, household_client_ref_id, individual_id, individual_client_ref_id)
-    assert member_response.status_code in [200, 202], f"Household Member creation failed"
-
-    print("Creating project beneficiary...")
-    beneficiary_id, beneficiary_client_ref_id, beneficiary_status = create_project_beneficiary(token, client, project_id, individual_id, individual_client_ref_id)
-    assert beneficiary_status in [200, 202], f"Project Beneficiary creation failed"
-
-    print("Creating project task...")
-    task_id, task_client_ref_id, task_status = create_project_task(token, client, project_id, beneficiary_id, beneficiary_client_ref_id, variant_id)
-    assert task_status in [200, 202], f"Project Task creation failed"
-
-    print("Creating side effect...")
-    side_effect_data, side_effect_status = create_side_effect_full(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id)
-    assert side_effect_status in [200, 202], f"Side Effect creation failed"
-    print(f"Side Effect created with ID: {side_effect_data['id']}")
-
-    # Step 2: Use create response data directly (async APIs may not be immediately searchable)
-    original_symptoms = side_effect_data.get("symptoms", [])
-    print(f"Original symptoms: {original_symptoms}")
-
-    # Step 3: Update the side effect (change symptoms)
-    new_symptoms = ["HEADACHE", "NAUSEA", "DIZZINESS"]
-    response = update_side_effect(token, client, side_effect_data, new_symptoms)
-    assert response.status_code in [200, 202], f"Side Effect update failed: {response.text}"
-
-    # Step 4: Verify update
-    updated_side_effect = response.json()["SideEffect"]
-    assert updated_side_effect["symptoms"] == new_symptoms, f"Symptoms not updated. Expected {new_symptoms}, got {updated_side_effect.get('symptoms')}"
-    print(f"Side Effect updated successfully. Symptoms changed from {original_symptoms} to {new_symptoms}")
 
 
 @pytest.mark.positive
@@ -580,12 +368,9 @@ def test_update_referral():
     task_id, task_client_ref_id, task_status = create_project_task(token, client, project_id, beneficiary_id, beneficiary_client_ref_id, variant_id)
     assert task_status in [200, 202], f"Project Task creation failed"
 
-    print("Creating side effect...")
-    side_effect_id, side_effect_client_ref_id, side_effect_status = create_side_effect(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id)
-    assert side_effect_status in [200, 202], f"Side Effect creation failed"
 
     print("Creating referral...")
-    referral_data, referral_status = create_referral_full(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id, side_effect_id, side_effect_client_ref_id, facility_id)
+    referral_data, referral_status = create_referral_full(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id, facility_id)
     assert referral_status in [200, 202], f"Referral creation failed"
     print(f"Referral created with ID: {referral_data['id']}")
 
@@ -651,220 +436,6 @@ def test_update_hf_referral():
 
 
 @pytest.mark.positive
-def test_delete_side_effect():
-    """Test to delete a side effect. Creates all dependencies internally first, then deletes it."""
-    token = get_auth_token("user")
-    client = APIClient(token=token)
-
-    # Step 1: Create all dependencies internally
-    print("Creating product variant...")
-    variant_response = create_product_variant(token, client)
-    assert variant_response.status_code in [200, 202], f"Product Variant creation failed"
-    variant_id = variant_response.json()["ProductVariant"][0]["id"]
-
-    print("Creating project...")
-    project_id, project_status = create_individual_project(token, client, boundaryType, boundaryCode, variant_id, variant_id)
-    assert project_status in [200, 202], f"Project creation failed"
-
-    print("Creating project resource...")
-    _, resource_status = create_project_resource(token, client, project_id, variant_id)
-    assert resource_status in [200, 202], f"Project Resource creation failed"
-
-    print("Creating household...")
-    household_id, household_client_ref_id, household_status = create_household(token, client)
-    assert household_status in [200, 202], f"Household creation failed"
-
-    print("Creating individual...")
-    individual_id, individual_client_ref_id, _, individual_status = create_individual(token, client)
-    assert individual_status in [200, 202], f"Individual creation failed"
-
-    print("Creating household member...")
-    member_response = create_household_member(token, client, household_id, household_client_ref_id, individual_id, individual_client_ref_id)
-    assert member_response.status_code in [200, 202], f"Household Member creation failed"
-
-    print("Creating project beneficiary...")
-    beneficiary_id, beneficiary_client_ref_id, beneficiary_status = create_project_beneficiary(token, client, project_id, individual_id, individual_client_ref_id)
-    assert beneficiary_status in [200, 202], f"Project Beneficiary creation failed"
-
-    print("Creating project task...")
-    task_id, task_client_ref_id, task_status = create_project_task(token, client, project_id, beneficiary_id, beneficiary_client_ref_id, variant_id)
-    assert task_status in [200, 202], f"Project Task creation failed"
-
-    print("Creating side effect...")
-    side_effect_data, side_effect_status = create_side_effect_full(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id)
-    assert side_effect_status in [200, 202], f"Side Effect creation failed"
-    side_effect_id = side_effect_data['id']
-    print(f"Side Effect created with ID: {side_effect_id}")
-
-    # Step 2: Delete the side effect
-    print("Deleting side effect...")
-    response = delete_side_effect(token, client, side_effect_data)
-    assert response.status_code in [200, 202], f"Side Effect delete failed: {response.text}"
-
-    # Step 3: Verify deletion
-    deleted_side_effect = response.json()["SideEffect"]
-    assert deleted_side_effect["isDeleted"] == True, f"Side Effect not marked as deleted"
-    print(f"Side Effect {side_effect_id} deleted successfully")
-
-
-@pytest.mark.positive
-def test_create_side_effect_bulk():
-    """Test to bulk create a side effect. Asserts 202, then verifies via search by clientReferenceId."""
-    token = get_auth_token("user")
-    client = APIClient(token=token)
-
-    print("Creating product variant...")
-    variant_response = create_product_variant(token, client)
-    assert variant_response.status_code in [200, 202], f"Product Variant creation failed"
-    variant_id = variant_response.json()["ProductVariant"][0]["id"]
-
-    print("Creating project...")
-    project_id, project_status = create_individual_project(token, client, boundaryType, boundaryCode, variant_id, variant_id)
-    assert project_status in [200, 202], f"Project creation failed"
-
-    print("Creating project resource...")
-    _, resource_status = create_project_resource(token, client, project_id, variant_id)
-    assert resource_status in [200, 202], f"Project Resource creation failed"
-
-    print("Creating household...")
-    household_id, household_client_ref_id, household_status = create_household(token, client)
-    assert household_status in [200, 202], f"Household creation failed"
-
-    print("Creating individual...")
-    individual_id, individual_client_ref_id, _, individual_status = create_individual(token, client)
-    assert individual_status in [200, 202], f"Individual creation failed"
-
-    print("Creating household member...")
-    member_response = create_household_member(token, client, household_id, household_client_ref_id, individual_id, individual_client_ref_id)
-    assert member_response.status_code in [200, 202], f"Household Member creation failed"
-
-    print("Creating project beneficiary...")
-    beneficiary_id, beneficiary_client_ref_id, beneficiary_status = create_project_beneficiary(token, client, project_id, individual_id, individual_client_ref_id)
-    assert beneficiary_status in [200, 202], f"Project Beneficiary creation failed"
-
-    print("Creating project task...")
-    task_id, task_client_ref_id, task_status = create_project_task(token, client, project_id, beneficiary_id, beneficiary_client_ref_id, variant_id)
-    assert task_status in [200, 202], f"Project Task creation failed"
-
-    print("Bulk creating side effect...")
-    client_ref_id, status_code = create_side_effect_bulk(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id)
-    assert status_code == 202, f"Side Effect bulk creation failed with status: {status_code}"
-    print("Bulk create accepted with 202")
-
-    side_effects = search_side_effect_by_client_ref(token, client, client_ref_id)
-    assert side_effects, f"No side effect found with clientReferenceId {client_ref_id} after bulk create"
-    assert side_effects[0]["clientReferenceId"] == client_ref_id
-    print(f"Verified: side effect with clientReferenceId {client_ref_id} found in search results")
-
-
-@pytest.mark.positive
-def test_update_side_effect_bulk():
-    """Test to bulk update a side effect. Creates all dependencies first, then bulk updates symptoms."""
-    token = get_auth_token("user")
-    client = APIClient(token=token)
-
-    print("Creating product variant...")
-    variant_response = create_product_variant(token, client)
-    assert variant_response.status_code in [200, 202], f"Product Variant creation failed"
-    variant_id = variant_response.json()["ProductVariant"][0]["id"]
-
-    print("Creating project...")
-    project_id, project_status = create_individual_project(token, client, boundaryType, boundaryCode, variant_id, variant_id)
-    assert project_status in [200, 202], f"Project creation failed"
-
-    print("Creating project resource...")
-    _, resource_status = create_project_resource(token, client, project_id, variant_id)
-    assert resource_status in [200, 202], f"Project Resource creation failed"
-
-    print("Creating household...")
-    household_id, household_client_ref_id, household_status = create_household(token, client)
-    assert household_status in [200, 202], f"Household creation failed"
-
-    print("Creating individual...")
-    individual_id, individual_client_ref_id, _, individual_status = create_individual(token, client)
-    assert individual_status in [200, 202], f"Individual creation failed"
-
-    print("Creating household member...")
-    member_response = create_household_member(token, client, household_id, household_client_ref_id, individual_id, individual_client_ref_id)
-    assert member_response.status_code in [200, 202], f"Household Member creation failed"
-
-    print("Creating project beneficiary...")
-    beneficiary_id, beneficiary_client_ref_id, beneficiary_status = create_project_beneficiary(token, client, project_id, individual_id, individual_client_ref_id)
-    assert beneficiary_status in [200, 202], f"Project Beneficiary creation failed"
-
-    print("Creating project task...")
-    task_id, task_client_ref_id, task_status = create_project_task(token, client, project_id, beneficiary_id, beneficiary_client_ref_id, variant_id)
-    assert task_status in [200, 202], f"Project Task creation failed"
-
-    print("Creating side effect (regular create to get full data)...")
-    side_effect_data, side_effect_status = create_side_effect_full(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id)
-    assert side_effect_status in [200, 202], f"Side Effect creation failed"
-    print(f"Side Effect created with ID: {side_effect_data['id']}")
-
-    new_symptoms = ["HEADACHE"]
-    print(f"Bulk updating side effect symptoms to {new_symptoms}...")
-    response = update_side_effect_bulk(token, client, side_effect_data, new_symptoms)
-    assert response.status_code == 202, f"Side Effect bulk update failed: {response.text}"
-    print("Bulk update accepted with 202")
-
-    side_effects = search_side_effect_by_client_ref(token, client, side_effect_data["clientReferenceId"])
-    assert side_effects, f"Side Effect not found after bulk update"
-    assert side_effects[0].get("symptoms") == new_symptoms, f"symptoms not updated. Got {side_effects[0].get('symptoms')}"
-    print(f"Side Effect bulk updated successfully. symptoms verified as {new_symptoms}.")
-
-
-@pytest.mark.positive
-def test_delete_side_effect_bulk():
-    """Test to bulk delete a side effect. Creates all dependencies first, then bulk deletes it."""
-    token = get_auth_token("user")
-    client = APIClient(token=token)
-
-    print("Creating product variant...")
-    variant_response = create_product_variant(token, client)
-    assert variant_response.status_code in [200, 202], f"Product Variant creation failed"
-    variant_id = variant_response.json()["ProductVariant"][0]["id"]
-
-    print("Creating project...")
-    project_id, project_status = create_individual_project(token, client, boundaryType, boundaryCode, variant_id, variant_id)
-    assert project_status in [200, 202], f"Project creation failed"
-
-    print("Creating project resource...")
-    _, resource_status = create_project_resource(token, client, project_id, variant_id)
-    assert resource_status in [200, 202], f"Project Resource creation failed"
-
-    print("Creating household...")
-    household_id, household_client_ref_id, household_status = create_household(token, client)
-    assert household_status in [200, 202], f"Household creation failed"
-
-    print("Creating individual...")
-    individual_id, individual_client_ref_id, _, individual_status = create_individual(token, client)
-    assert individual_status in [200, 202], f"Individual creation failed"
-
-    print("Creating household member...")
-    member_response = create_household_member(token, client, household_id, household_client_ref_id, individual_id, individual_client_ref_id)
-    assert member_response.status_code in [200, 202], f"Household Member creation failed"
-
-    print("Creating project beneficiary...")
-    beneficiary_id, beneficiary_client_ref_id, beneficiary_status = create_project_beneficiary(token, client, project_id, individual_id, individual_client_ref_id)
-    assert beneficiary_status in [200, 202], f"Project Beneficiary creation failed"
-
-    print("Creating project task...")
-    task_id, task_client_ref_id, task_status = create_project_task(token, client, project_id, beneficiary_id, beneficiary_client_ref_id, variant_id)
-    assert task_status in [200, 202], f"Project Task creation failed"
-
-    print("Creating side effect (regular create to get full data)...")
-    side_effect_data, side_effect_status = create_side_effect_full(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id)
-    assert side_effect_status in [200, 202], f"Side Effect creation failed"
-    side_effect_id = side_effect_data["id"]
-    print(f"Side Effect created with ID: {side_effect_id}")
-
-    print("Bulk deleting side effect...")
-    response = delete_side_effect_bulk(token, client, side_effect_data)
-    assert response.status_code == 202, f"Side Effect bulk delete failed: {response.text}"
-    print(f"Side Effect {side_effect_id} bulk deleted successfully (202 accepted)")
-
-
-@pytest.mark.positive
 def test_delete_referral():
     """Test to delete a referral. Creates all dependencies internally first, then deletes it."""
     token = get_auth_token("user")
@@ -913,12 +484,9 @@ def test_delete_referral():
     task_id, task_client_ref_id, task_status = create_project_task(token, client, project_id, beneficiary_id, beneficiary_client_ref_id, variant_id)
     assert task_status in [200, 202], f"Project Task creation failed"
 
-    print("Creating side effect...")
-    side_effect_id, side_effect_client_ref_id, side_effect_status = create_side_effect(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id)
-    assert side_effect_status in [200, 202], f"Side Effect creation failed"
 
     print("Creating referral...")
-    referral_data, referral_status = create_referral_full(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id, side_effect_id, side_effect_client_ref_id, facility_id)
+    referral_data, referral_status = create_referral_full(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id, facility_id)
     assert referral_status in [200, 202], f"Referral creation failed"
     referral_id = referral_data['id']
     print(f"Referral created with ID: {referral_id}")
@@ -978,12 +546,9 @@ def test_create_referral_bulk():
     task_id, task_client_ref_id, task_status = create_project_task(token, client, project_id, beneficiary_id, beneficiary_client_ref_id, variant_id)
     assert task_status in [200, 202], f"Project Task creation failed"
 
-    print("Creating side effect...")
-    side_effect_id, side_effect_client_ref_id, side_effect_status = create_side_effect(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id)
-    assert side_effect_status in [200, 202], f"Side Effect creation failed"
 
     print("Bulk creating referral...")
-    client_ref_id, status_code = create_referral_bulk(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id, side_effect_id, side_effect_client_ref_id, facility_id)
+    client_ref_id, status_code = create_referral_bulk(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id, facility_id)
     assert status_code == 202, f"Referral bulk creation failed with status: {status_code}"
     print("Bulk create accepted with 202")
 
@@ -1037,12 +602,9 @@ def test_update_referral_bulk():
     task_id, task_client_ref_id, task_status = create_project_task(token, client, project_id, beneficiary_id, beneficiary_client_ref_id, variant_id)
     assert task_status in [200, 202], f"Project Task creation failed"
 
-    print("Creating side effect...")
-    side_effect_id, side_effect_client_ref_id, side_effect_status = create_side_effect(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id)
-    assert side_effect_status in [200, 202], f"Side Effect creation failed"
 
     print("Creating referral (regular create to get full data)...")
-    referral_data, referral_status = create_referral_full(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id, side_effect_id, side_effect_client_ref_id, facility_id)
+    referral_data, referral_status = create_referral_full(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id, facility_id)
     assert referral_status in [200, 202], f"Referral creation failed"
     print(f"Referral created with ID: {referral_data['id']}")
 
@@ -1102,12 +664,9 @@ def test_delete_referral_bulk():
     task_id, task_client_ref_id, task_status = create_project_task(token, client, project_id, beneficiary_id, beneficiary_client_ref_id, variant_id)
     assert task_status in [200, 202], f"Project Task creation failed"
 
-    print("Creating side effect...")
-    side_effect_id, side_effect_client_ref_id, side_effect_status = create_side_effect(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id)
-    assert side_effect_status in [200, 202], f"Side Effect creation failed"
 
     print("Creating referral (regular create to get full data)...")
-    referral_data, referral_status = create_referral_full(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id, side_effect_id, side_effect_client_ref_id, facility_id)
+    referral_data, referral_status = create_referral_full(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id, facility_id)
     assert referral_status in [200, 202], f"Referral creation failed"
     referral_id = referral_data["id"]
     print(f"Referral created with ID: {referral_id}")
@@ -1282,28 +841,7 @@ def test_delete_hf_referral_bulk():
 
 # --- Helper functions ---
 
-def create_side_effect(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id):
-    payload = load_payload("referralmanagement/side_effect", "create_side_effect.json")
-    payload["RequestInfo"] = get_request_info(token)
-    payload["SideEffect"]["tenantId"] = tenantId
-    payload["SideEffect"]["clientReferenceId"] = str(uuid.uuid4())
-    payload["SideEffect"]["taskId"] = task_id
-    payload["SideEffect"]["taskClientReferenceId"] = task_client_ref_id
-    payload["SideEffect"]["projectBeneficiaryId"] = beneficiary_id
-    payload["SideEffect"]["projectBeneficiaryClientReferenceId"] = beneficiary_client_ref_id
-    payload["SideEffect"]["symptoms"] = ["FEVER", "VOMITING"]
-
-    url = f"/referralmanagement/side-effect/v1/_create"
-    response = client.post(url, payload)
-
-    if response.status_code not in [200, 202]:
-        raise Exception(f"Side Effect creation failed with status {response.status_code}: {response.text}")
-
-    side_effect_data = response.json()["SideEffect"]
-    return side_effect_data["id"], side_effect_data["clientReferenceId"], response.status_code
-
-
-def create_referral(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id, side_effect_id, side_effect_client_ref_id, facility_id):
+def create_referral(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id, facility_id):
     payload = load_payload("referralmanagement/referral", "create_referral.json")
     payload["RequestInfo"] = get_request_info(token)
     payload["Referral"]["tenantId"] = tenantId
@@ -1312,8 +850,6 @@ def create_referral(token, client, task_id, task_client_ref_id, beneficiary_id, 
     payload["Referral"]["taskClientReferenceId"] = task_client_ref_id
     payload["Referral"]["projectBeneficiaryId"] = beneficiary_id
     payload["Referral"]["projectBeneficiaryClientReferenceId"] = beneficiary_client_ref_id
-    payload["Referral"]["sideEffectId"] = side_effect_id
-    payload["Referral"]["sideEffectClientReferenceId"] = side_effect_client_ref_id
     payload["Referral"]["recipientType"] = "FACILITY"
     payload["Referral"]["recipientId"] = facility_id
     payload["Referral"]["reasons"] = ["FEVER"]
@@ -1363,21 +899,6 @@ def search_hf_referral_all(token, client):
     return response.json().get("HFReferrals", [])
 
 
-def search_side_effect_all(token, client):
-    """Search for all side effects without any filter."""
-    payload = load_payload("referralmanagement/side_effect", "search_side_effect.json")
-    payload["RequestInfo"] = get_request_info(token)
-    payload["SideEffect"] = {}  # Empty filter to get all
-
-    url = f"/referralmanagement/side-effect/v1/_search?limit=10&offset=0&tenantId={tenantId}"
-    response = client.post(url, payload)
-
-    if response.status_code not in [200, 202]:
-        raise Exception(f"Side Effect search failed with status {response.status_code}: {response.text}")
-
-    return response.json().get("SideEffects", [])
-
-
 def search_referral_all(token, client):
     """Search for all referrals without any filter."""
     payload = load_payload("referralmanagement/referral", "search_referral.json")
@@ -1391,21 +912,6 @@ def search_referral_all(token, client):
         raise Exception(f"Referral search failed with status {response.status_code}: {response.text}")
 
     return response.json().get("Referrals", [])
-
-
-def search_side_effect_by_id(token, client, side_effect_id):
-    """Search for a side effect by ID and return full data."""
-    payload = load_payload("referralmanagement/side_effect", "search_side_effect.json")
-    payload["RequestInfo"] = get_request_info(token)
-    payload["SideEffect"]["id"] = [side_effect_id]
-
-    url = f"/referralmanagement/side-effect/v1/_search?limit=100&offset=0&tenantId={tenantId}"
-    response = client.post(url, payload)
-
-    if response.status_code not in [200, 202]:
-        raise Exception(f"Side Effect search failed with status {response.status_code}: {response.text}")
-
-    return response.json().get("SideEffects", [])
 
 
 def search_referral_by_id(token, client, referral_id):
@@ -1438,7 +944,7 @@ def search_hf_referral_by_id(token, client, hf_referral_id):
     return response.json().get("HFReferrals", [])
 
 
-def create_referral_with_client_ref(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id, side_effect_id, side_effect_client_ref_id, facility_id):
+def create_referral_with_client_ref(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id, facility_id):
     """Create a referral and return id, clientReferenceId, and status_code."""
     payload = load_payload("referralmanagement/referral", "create_referral.json")
     payload["RequestInfo"] = get_request_info(token)
@@ -1448,8 +954,6 @@ def create_referral_with_client_ref(token, client, task_id, task_client_ref_id, 
     payload["Referral"]["taskClientReferenceId"] = task_client_ref_id
     payload["Referral"]["projectBeneficiaryId"] = beneficiary_id
     payload["Referral"]["projectBeneficiaryClientReferenceId"] = beneficiary_client_ref_id
-    payload["Referral"]["sideEffectId"] = side_effect_id
-    payload["Referral"]["sideEffectClientReferenceId"] = side_effect_client_ref_id
     payload["Referral"]["recipientType"] = "FACILITY"
     payload["Referral"]["recipientId"] = facility_id
     payload["Referral"]["reasons"] = ["FEVER"]
@@ -1485,28 +989,7 @@ def create_hf_referral_with_client_ref(token, client, project_id, project_facili
     return hf_referral_data["id"], hf_referral_data["clientReferenceId"], response.status_code
 
 
-def create_side_effect_full(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id):
-    """Create a side effect and return full data and status_code for update operations."""
-    payload = load_payload("referralmanagement/side_effect", "create_side_effect.json")
-    payload["RequestInfo"] = get_request_info(token)
-    payload["SideEffect"]["tenantId"] = tenantId
-    payload["SideEffect"]["clientReferenceId"] = str(uuid.uuid4())
-    payload["SideEffect"]["taskId"] = task_id
-    payload["SideEffect"]["taskClientReferenceId"] = task_client_ref_id
-    payload["SideEffect"]["projectBeneficiaryId"] = beneficiary_id
-    payload["SideEffect"]["projectBeneficiaryClientReferenceId"] = beneficiary_client_ref_id
-    payload["SideEffect"]["symptoms"] = ["FEVER", "VOMITING"]
-
-    url = f"/referralmanagement/side-effect/v1/_create"
-    response = client.post(url, payload)
-
-    if response.status_code not in [200, 202]:
-        raise Exception(f"Side Effect creation failed with status {response.status_code}: {response.text}")
-
-    return response.json()["SideEffect"], response.status_code
-
-
-def create_referral_full(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id, side_effect_id, side_effect_client_ref_id, facility_id):
+def create_referral_full(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id, facility_id):
     """Create a referral and return full data and status_code for update operations."""
     payload = load_payload("referralmanagement/referral", "create_referral.json")
     payload["RequestInfo"] = get_request_info(token)
@@ -1516,8 +999,6 @@ def create_referral_full(token, client, task_id, task_client_ref_id, beneficiary
     payload["Referral"]["taskClientReferenceId"] = task_client_ref_id
     payload["Referral"]["projectBeneficiaryId"] = beneficiary_id
     payload["Referral"]["projectBeneficiaryClientReferenceId"] = beneficiary_client_ref_id
-    payload["Referral"]["sideEffectId"] = side_effect_id
-    payload["Referral"]["sideEffectClientReferenceId"] = side_effect_client_ref_id
     payload["Referral"]["recipientType"] = "FACILITY"
     payload["Referral"]["recipientId"] = facility_id
     payload["Referral"]["reasons"] = ["FEVER"]
@@ -1549,35 +1030,6 @@ def create_hf_referral_full(token, client, project_id, project_facility_id):
         raise Exception(f"HF Referral creation failed with status {response.status_code}: {response.text}")
 
     return response.json()["HFReferral"], response.status_code
-
-
-def update_side_effect(token, client, side_effect_data, new_symptoms):
-    """
-    Update a side effect's symptoms.
-
-    Args:
-        side_effect_data: Full side effect object from search
-        new_symptoms: New symptoms list to set
-    """
-    payload = load_payload("referralmanagement/side_effect", "update_side_effect.json")
-
-    # Copy required fields from the searched side effect
-    payload["SideEffect"]["id"] = side_effect_data["id"]
-    payload["SideEffect"]["tenantId"] = side_effect_data["tenantId"]
-    payload["SideEffect"]["clientReferenceId"] = side_effect_data["clientReferenceId"]
-    payload["SideEffect"]["rowVersion"] = side_effect_data["rowVersion"]
-    payload["SideEffect"]["auditDetails"] = side_effect_data["auditDetails"]
-    payload["SideEffect"]["clientAuditDetails"] = side_effect_data.get("clientAuditDetails")
-    payload["SideEffect"]["taskId"] = side_effect_data["taskId"]
-    payload["SideEffect"]["taskClientReferenceId"] = side_effect_data.get("taskClientReferenceId")
-    payload["SideEffect"]["projectBeneficiaryId"] = side_effect_data["projectBeneficiaryId"]
-    payload["SideEffect"]["projectBeneficiaryClientReferenceId"] = side_effect_data.get("projectBeneficiaryClientReferenceId")
-    payload["SideEffect"]["symptoms"] = new_symptoms
-    payload["RequestInfo"] = get_request_info(token)
-
-    url = f"/referralmanagement/side-effect/v1/_update"
-    response = client.post(url, payload)
-    return response
 
 
 def update_referral(token, client, referral_data, new_reasons):
@@ -1637,112 +1089,6 @@ def update_hf_referral(token, client, hf_referral_data, new_symptom):
     return response
 
 
-def delete_side_effect(token, client, side_effect_data):
-    """
-    Delete a side effect (soft delete by setting isDeleted=true).
-
-    Args:
-        side_effect_data: Full side effect object from create response
-    """
-    payload = load_payload("referralmanagement/side_effect", "delete_side_effect.json")
-
-    # Copy required fields from the created side effect
-    payload["SideEffect"]["id"] = side_effect_data["id"]
-    payload["SideEffect"]["tenantId"] = side_effect_data["tenantId"]
-    payload["SideEffect"]["clientReferenceId"] = side_effect_data["clientReferenceId"]
-    payload["SideEffect"]["rowVersion"] = side_effect_data["rowVersion"]
-    payload["SideEffect"]["auditDetails"] = side_effect_data["auditDetails"]
-    payload["SideEffect"]["clientAuditDetails"] = side_effect_data.get("clientAuditDetails")
-    payload["SideEffect"]["taskId"] = side_effect_data["taskId"]
-    payload["SideEffect"]["taskClientReferenceId"] = side_effect_data.get("taskClientReferenceId")
-    payload["SideEffect"]["projectBeneficiaryId"] = side_effect_data["projectBeneficiaryId"]
-    payload["SideEffect"]["projectBeneficiaryClientReferenceId"] = side_effect_data.get("projectBeneficiaryClientReferenceId")
-    payload["SideEffect"]["symptoms"] = side_effect_data.get("symptoms", [])
-    payload["SideEffect"]["isDeleted"] = True
-    payload["RequestInfo"] = get_request_info(token)
-
-    url = f"/referralmanagement/side-effect/v1/_delete"
-    response = client.post(url, payload)
-    return response
-
-
-def create_side_effect_bulk(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id):
-    payload = load_payload("referralmanagement/side_effect", "create_bulk_side_effect.json")
-    payload["RequestInfo"] = get_request_info(token)
-    client_ref_id = str(uuid.uuid4())
-    payload["SideEffects"][0]["clientReferenceId"] = client_ref_id
-    payload["SideEffects"][0]["tenantId"] = tenantId
-    payload["SideEffects"][0]["taskId"] = task_id
-    payload["SideEffects"][0]["taskClientReferenceId"] = task_client_ref_id
-    payload["SideEffects"][0]["projectBeneficiaryId"] = beneficiary_id
-    payload["SideEffects"][0]["projectBeneficiaryClientReferenceId"] = beneficiary_client_ref_id
-    payload["SideEffects"][0]["symptoms"] = ["FEVER"]
-
-    url = f"/referralmanagement/side-effect/v1/bulk/_create"
-    response = client.post(url, payload)
-
-    if response.status_code not in [200, 202]:
-        raise Exception(f"Side Effect bulk create failed with status {response.status_code}: {response.text}")
-
-    return client_ref_id, response.status_code
-
-
-def update_side_effect_bulk(token, client, side_effect_data, new_symptoms):
-    payload = load_payload("referralmanagement/side_effect", "update_bulk_side_effect.json")
-    payload["RequestInfo"] = get_request_info(token)
-    payload["SideEffects"][0]["id"] = side_effect_data["id"]
-    payload["SideEffects"][0]["tenantId"] = side_effect_data["tenantId"]
-    payload["SideEffects"][0]["clientReferenceId"] = side_effect_data["clientReferenceId"]
-    payload["SideEffects"][0]["rowVersion"] = side_effect_data["rowVersion"]
-    payload["SideEffects"][0]["auditDetails"] = side_effect_data["auditDetails"]
-    payload["SideEffects"][0]["clientAuditDetails"] = side_effect_data.get("clientAuditDetails")
-    payload["SideEffects"][0]["taskId"] = side_effect_data["taskId"]
-    payload["SideEffects"][0]["taskClientReferenceId"] = side_effect_data.get("taskClientReferenceId")
-    payload["SideEffects"][0]["projectBeneficiaryId"] = side_effect_data["projectBeneficiaryId"]
-    payload["SideEffects"][0]["projectBeneficiaryClientReferenceId"] = side_effect_data.get("projectBeneficiaryClientReferenceId")
-    payload["SideEffects"][0]["symptoms"] = new_symptoms
-    payload["SideEffects"][0]["isDeleted"] = False
-
-    url = f"/referralmanagement/side-effect/v1/bulk/_update"
-    response = client.post(url, payload)
-    return response
-
-
-def delete_side_effect_bulk(token, client, side_effect_data):
-    payload = load_payload("referralmanagement/side_effect", "delete_bulk_side_effect.json")
-    payload["RequestInfo"] = get_request_info(token)
-    payload["SideEffects"][0]["id"] = side_effect_data["id"]
-    payload["SideEffects"][0]["tenantId"] = side_effect_data["tenantId"]
-    payload["SideEffects"][0]["clientReferenceId"] = side_effect_data["clientReferenceId"]
-    payload["SideEffects"][0]["rowVersion"] = side_effect_data["rowVersion"]
-    payload["SideEffects"][0]["auditDetails"] = side_effect_data["auditDetails"]
-    payload["SideEffects"][0]["clientAuditDetails"] = side_effect_data.get("clientAuditDetails")
-    payload["SideEffects"][0]["taskId"] = side_effect_data["taskId"]
-    payload["SideEffects"][0]["taskClientReferenceId"] = side_effect_data.get("taskClientReferenceId")
-    payload["SideEffects"][0]["projectBeneficiaryId"] = side_effect_data["projectBeneficiaryId"]
-    payload["SideEffects"][0]["projectBeneficiaryClientReferenceId"] = side_effect_data.get("projectBeneficiaryClientReferenceId")
-    payload["SideEffects"][0]["symptoms"] = side_effect_data.get("symptoms", [])
-    payload["SideEffects"][0]["isDeleted"] = True
-
-    url = f"/referralmanagement/side-effect/v1/bulk/_delete"
-    response = client.post(url, payload)
-    return response
-
-
-def search_side_effect_by_client_ref(token, client, client_ref_id):
-    payload = load_payload("referralmanagement/side_effect", "search_side_effect.json")
-    payload["RequestInfo"] = get_request_info(token)
-    payload["SideEffect"] = {"clientReferenceId": [client_ref_id]}
-
-    url = f"/referralmanagement/side-effect/v1/_search?limit=100&offset=0&tenantId={tenantId}"
-    response = client.post(url, payload)
-
-    if response.status_code not in [200, 202]:
-        raise Exception(f"Side Effect search failed with status {response.status_code}: {response.text}")
-
-    return response.json().get("SideEffects", [])
-
-
 def delete_referral(token, client, referral_data):
     """
     Delete a referral (soft delete by setting isDeleted=true).
@@ -1772,7 +1118,7 @@ def delete_referral(token, client, referral_data):
     return response
 
 
-def create_referral_bulk(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id, side_effect_id, side_effect_client_ref_id, facility_id):
+def create_referral_bulk(token, client, task_id, task_client_ref_id, beneficiary_id, beneficiary_client_ref_id, facility_id):
     payload = load_payload("referralmanagement/referral", "create_bulk_referral.json")
     payload["RequestInfo"] = get_request_info(token)
     client_ref_id = str(uuid.uuid4())

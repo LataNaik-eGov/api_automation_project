@@ -20,7 +20,6 @@ def parse_ids_file():
         "Project Facility": [],
         "Project Beneficiary": [],
         "Project Task": [],
-        "Side Effect": [],
         "Referral": [],
         "HF Referral": [],
         "Localization": [],
@@ -77,9 +76,6 @@ def parse_ids_file():
             project_tasks = re.findall(r'Project Task ID: (PT-[\d-]+)', content)
             entities["Project Task"] = project_tasks
 
-            # Extract Side Effect IDs (UUID format)
-            side_effects = re.findall(r'Side Effect ID: ([a-f0-9-]{36})', content)
-            entities["Side Effect"] = side_effects
 
             # Extract Referral IDs (UUID format)
             referrals = re.findall(r'Referral ID: ([a-f0-9-]{36})', content)

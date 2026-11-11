@@ -5,18 +5,18 @@
 | Metric | Count |
 |--------|-------|
 | Total Services | 17 |
-| Total Test Cases | 113 |
-| Positive Tests | 76 |
-| Negative Tests | 37 |
+| Total Test Cases | 107 |
+| Positive Tests | 72 |
+| Negative Tests | 35 |
 
 ## Test Coverage by Operation
 
 | Operation | Count |
 |-----------|-------|
-| Create | 35 |
-| Search | 40 |
-| Update | 18 |
-| Delete | 14 |
+| Create | 33 |
+| Search | 38 |
+| Update | 17 |
+| Delete | 13 |
 | Upsert | 2 |
 | Workflow | 1 |
 | Other | 3 |
@@ -185,17 +185,7 @@
 | test_create_project_task_with_invalid_tenant_id | Negative | Create |
 | test_search_project_task_with_invalid_tenant_id | Negative | Search |
 
-### 16. Referral Management Service (18 tests)
-
-#### Side Effect (6 tests)
-| Test Case | Type | Operation |
-|-----------|------|-----------|
-| test_create_side_effect | Positive | Create |
-| test_search_side_effect | Positive | Search |
-| test_update_side_effect | Positive | Update |
-| test_delete_side_effect | Positive | Delete |
-| test_create_side_effect_with_invalid_tenant_id | Negative | Create |
-| test_search_side_effect_with_invalid_tenant_id | Negative | Search |
+### 16. Referral Management Service (12 tests)
 
 #### Referral (6 tests)
 | Test Case | Type | Operation |
