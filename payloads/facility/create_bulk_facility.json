@@ -13,7 +13,7 @@
                 "latitude": 12.34,
                 "longitude": 123.45,
                 "locationAccuracy": 123.76,
-                "type": "PERMANENT",
+                "type": "TEMPORARY",
                 "addressLine1": "Alpine Apartments",
                 "addressLine2": "Road Number 12",
                 "landmark": "Near Niagara Lake",
