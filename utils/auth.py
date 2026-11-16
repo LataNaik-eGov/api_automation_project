@@ -14,6 +14,10 @@ from utils.config import (
 # Load environment variables from .env file
 load_dotenv(override=True)  # This forces reloading of updated values
 
+# Seconds to wait for the login endpoint. Without a timeout a stalled server
+# hangs the caller indefinitely instead of failing with a readable error.
+LOGIN_TIMEOUT = 60
+
 _token_cache: dict[str, str] = {}
 _user_info_cache: dict[str, dict] = {}
 
@@ -53,7 +57,9 @@ def oauth_token(
     if header_value:
         headers["authorization"] = header_value
 
-    return requests.post(BASE_URL + SERVICE_OAUTH_TOKEN, data=data, headers=headers)
+    return requests.post(
+        BASE_URL + SERVICE_OAUTH_TOKEN, data=data, headers=headers, timeout=LOGIN_TIMEOUT
+    )
 
 
 def get_auth_token(service: str):
