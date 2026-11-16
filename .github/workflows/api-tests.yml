@@ -52,16 +52,33 @@ jobs:
         run: mkdir -p output reports
 
       - name: Verify login credentials
-        timeout-minutes: 2
+        timeout-minutes: 6
         run: |
           python - <<'PY'
-          import sys
+          import sys, time
+          import requests
           from utils.auth import oauth_token
-          r = oauth_token()
-          if r.status_code != 200 or "access_token" not in r.text:
-              print(f"::error::Login to BASE_URL failed (HTTP {r.status_code}). Check the USERNAME/PASSWORD/BASE_URL/TENANTID repo secrets.")
-              sys.exit(1)
-          print("Login OK")
+
+          # Retry so a brief server outage does not cancel the whole run.
+          # Each attempt is capped by utils.auth.LOGIN_TIMEOUT.
+          attempts = 4
+          for attempt in range(1, attempts + 1):
+              try:
+                  r = oauth_token()
+              except requests.RequestException as exc:
+                  print(f"Attempt {attempt}/{attempts}: BASE_URL unreachable ({type(exc).__name__})")
+              else:
+                  if r.status_code == 200 and "access_token" in r.text:
+                      print("Login OK")
+                      sys.exit(0)
+                  if r.status_code in (400, 401):
+                      print(f"::error::Login rejected (HTTP {r.status_code}). Check the USERNAME/PASSWORD/TENANTID/USERTYPE repo secrets.")
+                      sys.exit(1)
+                  print(f"Attempt {attempt}/{attempts}: login returned HTTP {r.status_code}")
+              if attempt < attempts:
+                  time.sleep(20)
+          print("::error::BASE_URL did not respond to login after several attempts. The test server looks down; re-run once it is back.")
+          sys.exit(1)
           PY
 
       - name: Run API tests
